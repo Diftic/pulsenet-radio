@@ -1,0 +1,99 @@
+// Window Event Hook
+SetWinEventHook
+UnhookWinEvent
+OBJECT_IDENTIFIER
+CHILDID_SELF
+
+// Window Functions
+FindWindowW
+GetWindowTextW
+GetClassNameW
+GetWindowTextLengthW
+GetClientRect
+ClientToScreen
+GetActiveWindow
+GetWindowThreadProcessId
+SetForegroundWindow
+GetForegroundWindow
+SetFocus
+SetActiveWindow
+GetWindowLong
+SetWindowLong
+GetParent
+GetAncestor
+GetWindowRect
+SetWindowPos
+EnumWindows
+EnumChildWindows
+EnumThreadWindows
+BringWindowToTop
+ShowWindow
+IsWindow
+
+WINDOW_LONG_PTR_INDEX
+WINDOW_EX_STYLE
+
+// Window positioning flags
+SET_WINDOW_POS_FLAGS
+
+// HWND special values
+HWND_TOPMOST
+HWND_NOTOPMOST
+
+// DPI Scaling
+GetDpiForMonitor
+MonitorFromWindow
+MONITOR_DPI_TYPE
+
+// Winuser.h Event Constants
+EVENT_*
+
+// SetWinEventHook dwFlags Constants
+WINEVENT_*
+
+// Message Loop
+GetMessage
+TranslateMessage
+DispatchMessage
+
+// Keyboard Virtual Key Codes
+VIRTUAL_KEY
+
+// Global Hotkey (low-level hook)
+SetWindowsHookEx
+UnhookWindowsHookEx
+CallNextHookEx
+GetModuleHandle
+WINDOWS_HOOK_ID
+HC_ACTION
+KBDLLHOOKSTRUCT
+GetAsyncKeyState
+GetCurrentThreadId
+
+// WM messages
+WM_*
+
+// Thread input
+AttachThreadInput
+
+// Layered Window (opacity)
+SetLayeredWindowAttributes
+AllowSetForegroundWindow
+LAYERED_WINDOW_ATTRIBUTES_FLAGS
+
+// Cursor
+SetCursorPos
+
+// ProcessExitWatcher
+PROCESS_ACCESS_RIGHTS
+WAIT_EVENT
+INFINITE
+OpenProcess
+CloseHandle
+WaitForSingleObject
+GetModuleFileNameEx
+
+PostThreadMessage
+SendMessage
+PostMessage
+MSLLHOOKSTRUCT

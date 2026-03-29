@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pulsenet Radio</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="backdrop"></div>
+
+  <div id="player-shell">
+
+    <div id="header">
+      <div id="logo-wordmark">PULSENET RADIO</div>
+      <div id="tagline">The 'Verse always has a soundtrack.</div>
+    </div>
+
+    <!-- YouTube IFrame API mounts here -->
+    <div id="player"></div>
+
+    <!-- Track info strip -->
+    <div id="track-info">
+      <span id="track-title">--</span>
+    </div>
+
+    <!-- Playback controls -->
+    <div id="controls">
+      <button class="ctrl-btn" id="btn-prev"  title="Previous track">&#9198;</button>
+      <button class="ctrl-btn" id="btn-rev"   title="Rewind 30s">&#8722;30s</button>
+      <button class="ctrl-btn primary" id="btn-play" title="Play / Pause">&#9654;</button>
+      <button class="ctrl-btn" id="btn-fwd"   title="Fast-forward 30s">&#43;30s</button>
+      <button class="ctrl-btn" id="btn-next"  title="Next track">&#9197;</button>
+    </div>
+
+    <!-- Playlist switcher -->
+    <div id="playlist-row">
+      <input id="playlist-input" type="text" placeholder="Paste playlist URL or ID to switch…" spellcheck="false">
+      <button id="btn-load-playlist">Load</button>
+    </div>
+
+    <!-- Status line -->
+    <div id="status-line" class="hidden"></div>
+
+  </div>
+
+  <script src="player.js"></script>
+</body>
+</html>

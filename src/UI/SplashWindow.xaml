@@ -1,0 +1,102 @@
+<Window x:Class="pulsenet.UI.SplashWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Pulsenet Radio"
+        Width="420" Height="260"
+        WindowStyle="None"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterScreen"
+        ShowInTaskbar="False"
+        Topmost="True"
+        Background="#0d1b2a">
+
+    <Grid>
+        <!-- Top accent line -->
+        <Rectangle Height="3" VerticalAlignment="Top" Fill="#22d3ee"/>
+
+        <!-- Update banner (collapsed until an update is found) -->
+        <Border x:Name="UpdateBanner"
+                Visibility="Collapsed"
+                VerticalAlignment="Top"
+                Margin="0,3,0,0"
+                Background="#0a2318"
+                BorderBrush="#22d3ee"
+                BorderThickness="0,0,0,1"
+                Height="36">
+            <Grid Margin="16,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="UpdateLabel"
+                           Grid.Column="0"
+                           FontFamily="Segoe UI"
+                           FontSize="12"
+                           Foreground="#22d3ee"
+                           VerticalAlignment="Center"/>
+                <Button x:Name="UpdateButton"
+                        Grid.Column="1"
+                        Click="OnUpdateClick"
+                        FontFamily="Segoe UI"
+                        FontSize="11"
+                        FontWeight="SemiBold"
+                        Padding="10,4"
+                        Background="#22d3ee"
+                        Foreground="#09131f"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
+
+        <!-- Main content -->
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="40,0">
+
+            <!-- Logo -->
+            <Image Source="/Assets/logo.png"
+                   Width="100" Height="100"
+                   HorizontalAlignment="Center"
+                   RenderOptions.BitmapScalingMode="HighQuality"/>
+
+            <!-- Divider -->
+            <Rectangle Height="1" Fill="#1e3a5f" Margin="0,20,0,20"/>
+
+            <!-- Hotkey prompt -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <TextBlock Text="Press "
+                           FontFamily="Segoe UI"
+                           FontSize="14"
+                           Foreground="#94a3b8"
+                           VerticalAlignment="Center"/>
+                <Border Background="#132238"
+                        BorderBrush="#2a4a6b"
+                        BorderThickness="1"
+                        CornerRadius="4"
+                        Padding="10,4"
+                        VerticalAlignment="Center">
+                    <TextBlock x:Name="HotkeyLabel"
+                               Text="F3"
+                               FontFamily="Consolas"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               Foreground="#22d3ee"/>
+                </Border>
+                <TextBlock Text=" to open the player"
+                           FontFamily="Segoe UI"
+                           FontSize="14"
+                           Foreground="#94a3b8"
+                           VerticalAlignment="Center"/>
+            </StackPanel>
+
+        </StackPanel>
+
+        <!-- Bottom hint -->
+        <TextBlock Text="Right-click the tray icon to exit"
+                   FontFamily="Segoe UI"
+                   FontSize="10"
+                   Foreground="#334155"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Bottom"
+                   Margin="0,0,0,16"/>
+    </Grid>
+</Window>

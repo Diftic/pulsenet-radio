@@ -1,0 +1,22 @@
+<Window x:Class="pulsenet.UI.OverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        WindowStyle="None"
+        ShowInTaskbar="False"
+        Topmost="True"
+        ShowActivated="False"
+        AllowsTransparency="True"
+        WindowStartupLocation="Manual"
+        Visibility="Collapsed"
+        Title="Pulsenet Radio">
+    <Window.Background>
+        <!-- Opacity is user-configurable via Settings → Background Opacity.
+             Must NOT be zero — fully transparent areas click-through in WPF. -->
+        <SolidColorBrush x:Name="OverlayBg" Color="#1a1a1a" Opacity="0.05"/>
+    </Window.Background>
+
+    <Grid>
+        <wv2:WebView2 x:Name="WebView" />
+    </Grid>
+</Window>
