@@ -20,6 +20,29 @@
   var pendingPlaylist = null;
   var activeBtn       = null;
 
+  // ---- Station icon hover preview ----
+  var previewWrap = document.getElementById('station-preview');
+  var previewImg  = document.getElementById('station-preview-img');
+
+  function showPreview(iconSrc) {
+    if (!previewWrap || !previewImg || !iconSrc) return;
+    previewImg.src = iconSrc;
+    previewWrap.classList.remove('hidden');
+    // Trigger fade-in on next frame so the transition fires after display:flex
+    requestAnimationFrame(function () {
+      previewWrap.classList.add('visible');
+    });
+  }
+
+  function hidePreview() {
+    if (!previewWrap) return;
+    previewWrap.classList.remove('visible');
+    // Remove from layout after fade completes (matches transition: 0.18s)
+    setTimeout(function () {
+      previewWrap.classList.add('hidden');
+    }, 200);
+  }
+
   // ---- Build station buttons from stations.js config ----
   var stations = window.STATIONS || [];
 
@@ -56,6 +79,11 @@
       btn.addEventListener('click', function () {
         activateStation(s, btn);
       });
+
+      if (s.icon) {
+        btn.addEventListener('mouseenter', function () { showPreview(s.icon); });
+        btn.addEventListener('mouseleave', hidePreview);
+      }
 
       (s.side === 'left' ? leftCol : rightCol).appendChild(btn);
     });
