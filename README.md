@@ -58,7 +58,7 @@ Tune in while you fly. Keep it on while you fight. Let it run while you haul. Pu
 
 1. Download the latest release from the [Releases page](https://github.com/Diftic/pulsenet-radio/releases)
 2. Extract the archive to any folder
-3. Run `pulsenet.exe`
+3. Run `PulseNet-Broadcaster.exe`
 
 The overlay will appear immediately. No installer, no configuration required to get started.
 

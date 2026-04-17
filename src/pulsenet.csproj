@@ -9,7 +9,7 @@
         <UseWindowsForms>true</UseWindowsForms>
         <Platform>x64</Platform>
         <StartupObject>pulsenet.Program</StartupObject>
-        <AssemblyName>pulsenet</AssemblyName>
+        <AssemblyName>PulseNet-Broadcaster</AssemblyName>
         <EnableWindowsTargeting>true</EnableWindowsTargeting>
         <ApplicationManifest>app.manifest</ApplicationManifest>
         <Version>0.1.0</Version>

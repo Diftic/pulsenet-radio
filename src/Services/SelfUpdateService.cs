@@ -40,7 +40,7 @@ internal static class SelfUpdateService
     private static async Task ApplyMsiAsync(string msiUrl, Action quit, ILogger? log)
     {
         var currentExe = Process.GetCurrentProcess().MainModule?.FileName
-            ?? Path.Combine(AppContext.BaseDirectory, "pulsenet.exe");
+            ?? Path.Combine(AppContext.BaseDirectory, "PulseNet-Broadcaster.exe");
 
         var tempDir = Path.Combine(Path.GetTempPath(), "pulsenet_update");
         Directory.CreateDirectory(tempDir);
@@ -85,13 +85,13 @@ internal static class SelfUpdateService
     private static async Task ApplyPortableAsync(string exeUrl, Action quit, ILogger? log)
     {
         var currentExe = Process.GetCurrentProcess().MainModule?.FileName
-            ?? Path.Combine(AppContext.BaseDirectory, "pulsenet.exe");
+            ?? Path.Combine(AppContext.BaseDirectory, "PulseNet-Broadcaster.exe");
 
         log?.LogInformation("Self-update: current exe = {Exe}", currentExe);
 
         var tempDir = Path.Combine(Path.GetTempPath(), "pulsenet_update");
         Directory.CreateDirectory(tempDir);
-        var tempExe = Path.Combine(tempDir, "pulsenet.exe");
+        var tempExe = Path.Combine(tempDir, "PulseNet-Broadcaster.exe");
 
         log?.LogInformation("Downloading update from {Url}", exeUrl);
         using var response = await _http.GetAsync(exeUrl, HttpCompletionOption.ResponseHeadersRead);
