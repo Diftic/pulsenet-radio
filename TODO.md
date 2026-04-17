@@ -44,8 +44,6 @@
 
 ## Settings
 
-- [ ] Validate YouTube channel ID format before saving (must match `UC[A-Za-z0-9_-]{22}`)
-- [ ] Show channel name preview after entering ID (YouTube oEmbed API, no key required)
 - [x] Update `UpdateChecker.cs` GitHub URL — points at `Diftic/PulseNet-Player`
 
 ## Distribution
