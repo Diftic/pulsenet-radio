@@ -54,7 +54,7 @@
 - [x] GitHub Actions CI — `.github/workflows/build.yml` builds exe + MSI on `v*` tag push
 - [x] WiX installer — `installer/installer.wxs`, publishes `PulseNet-Setup.msi`
 - [x] Stable asset naming — `PulseNet-Player.exe` + `PulseNet-Setup.msi`
-- [ ] **Enable GitHub Pages** — Repo → Settings → Pages → branch: master, folder: /docs
+- [x] **Enable GitHub Pages** — live at https://diftic.github.io/PulseNet-Player/ (branch: master, folder: /docs)
 
 ## Known issues / notes
 
