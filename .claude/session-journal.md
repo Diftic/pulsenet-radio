@@ -3,10 +3,20 @@
 A living journal that persists across compactions. Captures decisions, progress, and context.
 
 ## Current State
-- **Focus:** UI polish complete. Frame width at 1202px, video filling correctly, drag working, real channel wired. Ready to wire real station playlist IDs and add frame_glow.png.
+- **Focus:** Rebrand landed. App is "PulseNet Player", binary is `PulseNet-Player.exe`, repo is `Diftic/PulseNet-Player`. Word "Radio" banned in all public text (only exemption: `%APPDATA%\pulsenet-radio` folder, preserved for beta continuity).
 - **Blocked:** Real playlist IDs for 18 stations not yet provided. `frame_glow.png` asset not yet created.
 
 ## Log
+
+### 2026-04-17 — Completed: Rebrand Radio to Player
+- Directive from PulseNet owner: never use the word "Radio" in any circumstance. Player = "PulseNet Player", service = "PulseNet Broadcasting", full corp = "Pulse Broadcasting Network", ticker = PLSN.
+- Renamed binary `PulseNet-Broadcaster.exe` → `PulseNet-Player.exe` (csproj AssemblyName, workflow copy+upload, installer target, UpdateChecker asset lookup, SelfUpdateService paths)
+- Renamed GitHub repo `Diftic/pulsenet-radio` → `Diftic/PulseNet-Player` (via `gh repo rename`); local git remote updated; UpdateChecker API URL + UA updated
+- Scrubbed "Pulsenet Radio" → "PulseNet Player" across Constants, WPF titles, error strings, renderer title/comments, installer product/shortcut/dir/regkey/description, license copyright, README/DEVLOG/TODO titles and prose
+- Scrubbed "Cargo Deck Radio" → "The Cargo Deck" in RP lore
+- Renamed `RadioPlan.md` → `PulseNetPlan.md` and `src/Assets/radio_background.png` → `src/Assets/pulsenet_background.png`; scrubbed content references
+- `%APPDATA%\pulsenet-radio\` folder intentionally preserved (exempted per user decision to avoid migrating beta testers' saved settings)
+- Build green, pushed as commit `0a0ab81`; GitHub Pages will redeploy the sales page
 
 ### 2026-04-14 17:00 — Completed: Session 2 UI polish
 - Drag rebuilt: JS-initiated `startDrag` → C# hook handles MOUSEMOVE/LBUTTONUP. Whole frame draggable.
@@ -36,6 +46,6 @@ A living journal that persists across compactions. Captures decisions, progress,
 - Build: green — 0 errors, 0 warnings
 
 ### 2026-04-14 13:00 — Decision: stay WPF, discard Python rewrite
-- RadioPlan.md proposed PyQt6 rewrite — no technical justification found
+- PulseNetPlan.md (formerly RadioPlan.md) proposed PyQt6 rewrite, no technical justification found
 - WPF prototype already has working WebView2, hotkeys, transparency, tray, settings
 - All visual layers live in HTML/CSS/JS renderer to avoid WPF airspace problem

@@ -1,9 +1,9 @@
-# RadioPlayer Overlay — System Plan
-**Project:** SC Radio Overlay Player  
+# PulseNet Player Overlay, System Plan
+**Project:** SC PulseNet Overlay Player  
 **Author:** Mallachi  
 **Date:** 2026-04-14  
-**Status:** Planning  
-**Incorporates:** PulseNet Radio (C# WPF) learnings + sci_fi_overlay_animation_spec.md
+**Status:** Discarded (PyQt6 rewrite did not proceed; WPF build retained)  
+**Incorporates:** PulseNet Player (C# WPF) learnings + sci_fi_overlay_animation_spec.md
 
 ---
 
@@ -155,7 +155,7 @@ Applied to `QGraphicsOpacityEffect.setOpacity(brightness)`
 
 ### 2.4 YouTube IFrame (Renderer)
 
-Ported directly from PulseNet Radio `Renderer/` with these changes:
+Ported directly from PulseNet Player `Renderer/` with these changes:
 
 | Change | Reason |
 |---|---|
@@ -207,8 +207,8 @@ GLOW_MAX      = 1.0
 ### 2.8 Assets Required
 | Asset | Status |
 |---|---|
-| `frame_base.png` | Derived from `Radio_Background.png` — glow elements removed |
-| `frame_glow.png` | Derived from `Radio_Background.png` — only light elements, transparent bg |
+| `frame_base.png` | Derived from `pulsenet_background.png` — glow elements removed |
+| `frame_glow.png` | Derived from `pulsenet_background.png` — only light elements, transparent bg |
 | `logo.png` | Required — displayed over video rect when IDLE |
 | `Renderer/index.html` | Port from PulseNet — strip free-input playlist row |
 | `Renderer/player.js` | Port from PulseNet — minor changes |
@@ -282,13 +282,13 @@ GLOW_MAX      = 1.0
 - [ ] Channel ID
 - [ ] Playlist IDs + labels + count
 - [ ] Logo asset
-- [ ] Confirm `Radio_Background.png` is final (need to derive base/glow PNGs)
+- [ ] Confirm `pulsenet_background.png` is final (need to derive base/glow PNGs)
 - [ ] Hotkey confirmation (default: F9)
-- [ ] Project folder path (suggest `C:\Users\larse\PycharmProjects\sc-radio-overlay`)
+- [ ] Project folder path (suggest `C:\Users\larse\PycharmProjects\sc-pulsenet-overlay`)
 
 ---
 
-## Key Learnings from PulseNet Radio
+## Key Learnings from PulseNet Player
 
 | Learning | Applied How |
 |---|---|
