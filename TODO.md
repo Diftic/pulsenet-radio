@@ -37,8 +37,8 @@
 
 ## Player features
 
-- [ ] Volume control (mute/unmute + slider)
-- [ ] "Now Playing" tray tooltip — poll `player.getVideoData().title` and update `NotifyIcon.Text`
+- [x] Volume control — handled by the YouTube embed's own controls
+- [x] "Now Playing" info — track title rendered inside the YouTube embed
 - [ ] Shuffle toggle
 - [ ] Loop toggle (single track / playlist)
 - [ ] Keyboard shortcuts within player (space = play/pause, arrow keys = seek)
