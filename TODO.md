@@ -31,7 +31,6 @@
 ## Stations
 
 - [ ] Wire real playlist IDs for all 18 stations — set `live: true` and replace placeholder `playlistId` per station as they go live
-- [ ] Wire Info button click (`{type:'about'}`) to a C# handler (show about dialog or info overlay)
 - [x] Confirm station icons are final and correctly matched to stations
 - [ ] Add `frame_glow.png` asset for glow animation layer
 

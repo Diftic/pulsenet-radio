@@ -190,7 +190,6 @@ All icons live in `src/Renderer/assets/stations/`. Each station requires two fil
 ## Roadmap
 
 - [ ] Wire real YouTube playlist IDs for all 19 stations
-- [ ] Info / About dialog
 - [x] Volume control — provided by the embedded YouTube player
 - [x] "Now Playing" info — track title shown inside the YouTube embed
 - [x] Auto-update mechanism (in-app check + self-install)
