@@ -41,7 +41,6 @@
 - [x] "Now Playing" info — track title rendered inside the YouTube embed
 - [x] Shuffle — configured per station on the source YouTube channel/playlist
 - [x] Loop — configured per station on the source YouTube channel/playlist
-- [ ] Keyboard shortcuts within player (space = play/pause, arrow keys = seek)
 
 ## Settings
 
