@@ -25,6 +25,8 @@
 - [x] Station hover preview masked by frame (z-index 1, behind frame overlay)
 - [x] Offline station images — `live` flag in stations.js, auto `Offline_` prefix on hover when offline
 - [x] Mouse hook only active while overlay is visible — no global scroll impact when hidden
+- [x] Rebrand from "PulseNet Radio" to "PulseNet Player" (binary, repo, UI, docs, lore)
+- [x] v0.3.1 — video renders at natural 16:9 (812×457), no crop; frame resized to 1252×670 to fit; click-blocker bumped to 60px
 
 ## Stations
 
@@ -45,18 +47,18 @@
 
 - [ ] Validate YouTube channel ID format before saving (must match `UC[A-Za-z0-9_-]{22}`)
 - [ ] Show channel name preview after entering ID (YouTube oEmbed API, no key required)
-- [ ] Update `UpdateChecker.cs` GitHub URL once the PulseNet-Player repo is live
+- [x] Update `UpdateChecker.cs` GitHub URL — points at `Diftic/PulseNet-Player`
 
 ## Distribution
 
 - [x] **Establish GitHub repo** — https://github.com/Diftic/PulseNet-Player
 - [x] README.md — full project overview, 19-station lineup, architecture, developer guide
 - [x] Sales page — `docs/index.html`, matches SC-HUD design, Coming Soon CTA, no GitHub links
+- [x] **Auto-update feature** — `UpdateChecker` + `SelfUpdateService` ported from SC-HUD
+- [x] GitHub Actions CI — `.github/workflows/build.yml` builds exe + MSI on `v*` tag push
+- [x] WiX installer — `installer/installer.wxs`, publishes `PulseNet-Setup.msi`
+- [x] Stable asset naming — `PulseNet-Player.exe` + `PulseNet-Setup.msi`
 - [ ] **Enable GitHub Pages** — Repo → Settings → Pages → branch: master, folder: /docs
-- [ ] **Auto-update feature** — port the update mechanism from the Signature Scanner project
-- [ ] Set up GitHub Actions CI (build + publish on tag)
-- [ ] Create WiX installer (based on SC-HUD installer — strip SC-HUD references)
-- [ ] Stable asset naming for auto-update: `pulsenet-portable.exe`, `pulsenet-setup.msi`
 
 ## Known issues / notes
 

@@ -4,6 +4,25 @@
 
 ---
 
+## 2026-04-18 — Session 6 — v0.3.1 — Natural video resolution + frame refit
+
+### Video at natural 16:9, no crop
+Prior versions used `transform: scale(1.055)` on the YouTube iframe to fill the 812×433 video container's pillarbox bars (container was 1.875:1, not true 16:9). The fill was cosmetic but chopped ~12px off the top and bottom of actual video content. Removed the scale transform entirely. Reshaped `#video-wrap` and `#station-preview` to 812×457 (true 16:9), vertically recentered at y=316.5 so all station button positions remain valid without recalculation.
+
+### Frame refit: 1252×670
+With the video rect now taller, the previous frame size (1222×656, offset -10/-5) was too small — the cutout clipped the expanded video. Scaled the frame PNG display to 1252×670 with offset (-25, -12) so the cutout aligns with the new 812×457 video area. Frame art is slightly non-uniformly stretched (1.041× wide, 1.037× tall relative to its native 1202×646 canvas ratio); not visually noticeable.
+
+### Click-blocker — 50px → 60px
+YouTube's end-card / share overlay extends slightly higher than the previous 50px absorber reached. Bumped `#click-blocker` height to 60px so the full bottom control strip is neutralised.
+
+### Docs
+README Installation section rewritten to describe both `PulseNet-Setup.msi` (per-user installer, recommended) and `PulseNet-Player.exe` (standalone launcher). Roadmap updated — auto-update, CI, and WiX installer now ticked off; remaining roadmap is volume control, Now Playing tooltip, Info dialog, and real playlist IDs.
+
+### Release
+Tagged `v0.3.1`, pushed. Build & Release workflow publishes both artifacts to the GitHub release page.
+
+---
+
 ## 2026-04-17 — Session 5 — v0.3.0 — Discord CTA, click-blocker, tray icon cleanup
 
 ### Discord button in settings panel

@@ -3,10 +3,20 @@
 A living journal that persists across compactions. Captures decisions, progress, and context.
 
 ## Current State
-- **Focus:** Rebrand landed. App is "PulseNet Player", binary is `PulseNet-Player.exe`, repo is `Diftic/PulseNet-Player`. Word "Radio" banned in all public text (only exemption: `%APPDATA%\pulsenet-radio` folder, preserved for beta continuity).
-- **Blocked:** Real playlist IDs for 18 stations not yet provided. `frame_glow.png` asset not yet created.
+- **Focus:** v0.3.1 released. Video now renders at natural 16:9 (no crop), frame resized to 1252×670 to match, click-blocker bumped to 60px. README/DEVLOG/TODO refreshed. Build & Release workflow triggered by `v0.3.1` tag.
+- **Blocked:** Real playlist IDs for 18 stations not yet provided. `frame_glow.png` asset not yet created. GitHub Pages not yet enabled for sales page.
 
 ## Log
+
+### 2026-04-18 — Completed: v0.3.1 video + frame refit
+- Removed `transform: scale(1.055)` from YouTube iframe → video plays uncropped
+- `#video-wrap` reshaped to 812×457 (true 16:9), top=88, centered at y=316.5 so station buttons don't move
+- Frame scaled to 1252×670, offset (-25, -12) — cutout aligns with new video rect (user confirmed "PERFECT")
+- `#click-blocker` height 50px → 60px to fully cover YouTube end-card controls
+- Bumped csproj Version 0.3.0 → 0.3.1 (Version / FileVersion / AssemblyVersion)
+- Pushed `4768eb3` to master, tagged `v0.3.1`, workflow run id `24588476912` queued
+- README install section rewritten (MSI + standalone exe); roadmap trimmed (auto-update / CI / WiX installer ticked off)
+- DEVLOG.md got Session 6 entry; TODO.md updated to reflect completed distribution items
 
 ### 2026-04-17 — Completed: Rebrand Radio to Player
 - Directive from PulseNet owner: never use the word "Radio" in any circumstance. Player = "PulseNet Player", service = "PulseNet Broadcasting", full corp = "Pulse Broadcasting Network", ticker = PLSN.
