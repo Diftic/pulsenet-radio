@@ -12,9 +12,9 @@
         <AssemblyName>PulseNet-Broadcaster</AssemblyName>
         <EnableWindowsTargeting>true</EnableWindowsTargeting>
         <ApplicationManifest>app.manifest</ApplicationManifest>
-        <Version>0.1.0</Version>
-        <FileVersion>0.1.0</FileVersion>
-        <AssemblyVersion>0.1.0.0</AssemblyVersion>
+        <Version>0.2.0</Version>
+        <FileVersion>0.2.0</FileVersion>
+        <AssemblyVersion>0.2.0.0</AssemblyVersion>
         <!-- DPI is configured in app.manifest (PerMonitorV2); suppress WinForms conflict warning -->
         <NoWarn>$(NoWarn);WFO0003</NoWarn>
         <!-- Required for CsWin32 pointer parameters (e.g. GetWindowThreadProcessId) -->
@@ -41,10 +41,15 @@
         <EmbeddedResource Include="Assets\icon.ico" />
     </ItemGroup>
 
-    <!-- Renderer files ship alongside the exe and are loaded via virtual host mapping -->
+    <!-- Renderer files ship alongside the exe and are loaded via virtual host mapping.
+         ExcludeFromSingleFile keeps them on disk when PublishSingleFile=true —
+         WebView2 reads them via the virtual-host mount, so they cannot be bundled
+         into the self-extracting exe. -->
     <ItemGroup>
         <Content Include="Renderer\**">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+            <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+            <ExcludeFromSingleFile>true</ExcludeFromSingleFile>
         </Content>
     </ItemGroup>
 

@@ -1,0 +1,71 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Publish
+        shell: bash
+        run: |
+          dotnet publish src/pulsenet.csproj \
+            -c Release \
+            -r win-x64 \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:Version=${{ steps.version.outputs.VERSION }} \
+            -o artifacts
+
+      - name: Prepare portable exe
+        shell: pwsh
+        run: |
+          Copy-Item "artifacts\PulseNet-Broadcaster.exe" "PulseNet-Broadcaster.exe"
+
+      - name: Install WiX Toolset
+        run: dotnet tool install --global wix --version "4.*"
+
+      - name: Build MSI installer
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "installer\stage" -Force | Out-Null
+          Copy-Item "artifacts\*" "installer\stage\" -Recurse -Force
+          Copy-Item "src\Assets\icon.ico" "installer\"
+
+          cd installer
+          wix extension add WixToolset.UI.wixext/4.0.5
+          wix build installer.wxs `
+            -ext WixToolset.UI.wixext `
+            -o "..\PulseNet-Setup.msi" `
+            -arch x64 `
+            -define ProductVersion=${{ steps.version.outputs.VERSION }}
+
+      - name: Upload release artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            PulseNet-Broadcaster.exe
+            PulseNet-Setup.msi
+          generate_release_notes: true
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
