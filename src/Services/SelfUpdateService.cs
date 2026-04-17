@@ -26,11 +26,15 @@ internal static class SelfUpdateService
 
     private static bool IsMsiInstall()
     {
-        var exe  = Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+        var exe      = Process.GetCurrentProcess().MainModule?.FileName ?? string.Empty;
+        var userProg = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "Programs");
         var pf   = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
         var pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-        return exe.StartsWith(pf,   StringComparison.OrdinalIgnoreCase)
-            || exe.StartsWith(pf86, StringComparison.OrdinalIgnoreCase);
+        return exe.StartsWith(userProg, StringComparison.OrdinalIgnoreCase)
+            || exe.StartsWith(pf,       StringComparison.OrdinalIgnoreCase)
+            || exe.StartsWith(pf86,     StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task ApplyMsiAsync(string msiUrl, Action quit, ILogger? log)
@@ -97,10 +101,17 @@ internal static class SelfUpdateService
         await src.CopyToAsync(dest);
         log?.LogInformation("Download complete — saved to {Temp}", tempExe);
 
-        var script = $"""
-            Start-Sleep -Seconds 2
-            Copy-Item -Force '{tempExe}' '{currentExe}'
-            Start-Process '{currentExe}'
+        // Wait for the old process to exit before overwriting the exe. Avoids the
+        // file-lock race that a fixed Start-Sleep can lose on slow shutdowns.
+        var currentPid = Process.GetCurrentProcess().Id;
+        var script = $$"""
+            $target = {{currentPid}}
+            for ($i = 0; $i -lt 60; $i++) {
+                if (-not (Get-Process -Id $target -ErrorAction SilentlyContinue)) { break }
+                Start-Sleep -Milliseconds 500
+            }
+            Copy-Item -Force '{{tempExe}}' '{{currentExe}}'
+            Start-Process '{{currentExe}}'
             """;
 
         var scriptPath = Path.Combine(tempDir, "update.ps1");

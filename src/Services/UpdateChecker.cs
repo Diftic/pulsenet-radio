@@ -11,8 +11,7 @@ public record UpdateInfo(bool HasUpdate, string Version, string DownloadUrl, str
 
 internal static class UpdateChecker
 {
-    // TODO: update to the Pulsenet Radio GitHub releases endpoint once the repo is live.
-    private const string ApiUrl = "https://api.github.com/repos/Pulsenet-Radio/pulsenet-radio/releases/latest";
+    private const string ApiUrl = "https://api.github.com/repos/Diftic/pulsenet-radio/releases/latest";
 
     private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(5) };
 
@@ -49,9 +48,9 @@ internal static class UpdateChecker
             }
 
             var exe = release.Assets
-                .FirstOrDefault(a => a.Name.EndsWith("-portable.exe", StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(a => a.Name.Equals("PulseNet-Broadcaster.exe", StringComparison.OrdinalIgnoreCase));
             var msi = release.Assets
-                .FirstOrDefault(a => a.Name.EndsWith("-setup.msi", StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(a => a.Name.Equals("PulseNet-Setup.msi", StringComparison.OrdinalIgnoreCase));
 
             if (exe is null)
             {
