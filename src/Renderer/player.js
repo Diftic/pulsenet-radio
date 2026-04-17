@@ -258,6 +258,19 @@
     });
   }
 
+  var discordBtn = document.getElementById('discord-btn');
+  if (discordBtn) {
+    discordBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      try {
+        window.chrome.webview.postMessage(JSON.stringify({
+          type: 'openUrl',
+          url: 'https://discord.com/invite/Vxn7kzzWGJ',
+        }));
+      } catch (_) {}
+    });
+  }
+
   if (lockBtn) {
     lockBtn.addEventListener('click', function () {
       dragLocked = !dragLocked;

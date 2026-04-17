@@ -349,6 +349,10 @@ public partial class OverlayWindow : Window
                     _hotkeyListener.Paused = root.GetProperty("active").GetBoolean();
                     break;
 
+                case "openUrl":
+                    OpenInDefaultBrowser(root.GetProperty("url").GetString());
+                    break;
+
                 case "hotkey":
                     var keys = root.GetProperty("keys").EnumerateArray()
                         .Select(k => k.GetString() ?? "")
