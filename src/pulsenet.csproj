@@ -12,9 +12,10 @@
         <AssemblyName>PulseNet-Broadcaster</AssemblyName>
         <EnableWindowsTargeting>true</EnableWindowsTargeting>
         <ApplicationManifest>app.manifest</ApplicationManifest>
-        <Version>0.2.1</Version>
-        <FileVersion>0.2.1</FileVersion>
-        <AssemblyVersion>0.2.1.0</AssemblyVersion>
+        <ApplicationIcon>Assets\icon.ico</ApplicationIcon>
+        <Version>0.2.2</Version>
+        <FileVersion>0.2.2</FileVersion>
+        <AssemblyVersion>0.2.2.0</AssemblyVersion>
         <!-- DPI is configured in app.manifest (PerMonitorV2); suppress WinForms conflict warning -->
         <NoWarn>$(NoWarn);WFO0003</NoWarn>
         <!-- Required for CsWin32 pointer parameters (e.g. GetWindowThreadProcessId) -->
