@@ -111,7 +111,7 @@ YouTube iframe scaled via `transform: scale(1.055)` to fill pillarbox bars cause
 The RadioPlan.md proposal to rewrite in PyQt6 was discarded — no technical justification, WebView2 is more reliable than QWebEngineView on Windows for YouTube, and the existing WPF infrastructure was already proven.
 
 ### Frame asset
-- Source image: `src/Assets/radio_backround.png` — 2515×1292, transparent outside frame
+- Source image: `src/Assets/radio_background.png` — 2515×1292, transparent outside frame
 - Video area cut to fully transparent by user
 - Displayed at 50% → **1258×646** window (since trimmed to 1202×646)
 - Video rect within display: `left=193 top=100 width=812 height=433`
