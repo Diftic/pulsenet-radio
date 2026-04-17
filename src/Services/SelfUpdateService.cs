@@ -3,12 +3,51 @@ namespace pulsenet.Services;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 
 
 internal static class SelfUpdateService
 {
     private static readonly HttpClient _http = new();
+
+    private static string AppDataDir => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        Constants.AppDataFolderName);
+
+    public static string UpdateLogPath    => Path.Combine(AppDataDir, "update.log");
+    public static string MsiLogPath       => Path.Combine(AppDataDir, "update.msi.log");
+    public static string UpdateStatusPath => Path.Combine(AppDataDir, "update.status.json");
+
+    public sealed record LastUpdateResult(
+        [property: JsonPropertyName("timestamp")] string Timestamp,
+        [property: JsonPropertyName("success")]   bool   Success,
+        [property: JsonPropertyName("exitCode")]  int    ExitCode,
+        [property: JsonPropertyName("msiPath")]   string MsiPath);
+
+    /// <summary>
+    /// Reads the persisted result of the most recent MSI update attempt, if any.
+    /// Written by the PowerShell helper so we can surface failures on next launch.
+    /// </summary>
+    public static LastUpdateResult? ReadLastResult()
+    {
+        try
+        {
+            if (!File.Exists(UpdateStatusPath)) return null;
+            var json = File.ReadAllText(UpdateStatusPath);
+            return JsonSerializer.Deserialize<LastUpdateResult>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public static void ClearLastResult()
+    {
+        try { if (File.Exists(UpdateStatusPath)) File.Delete(UpdateStatusPath); } catch { }
+    }
 
     public static async Task ApplyAsync(UpdateInfo info, Action quit, ILogger? log = null)
     {
@@ -39,8 +78,11 @@ internal static class SelfUpdateService
 
     private static async Task ApplyMsiAsync(string msiUrl, Action quit, ILogger? log)
     {
+        Directory.CreateDirectory(AppDataDir);
+
         var currentExe = Process.GetCurrentProcess().MainModule?.FileName
             ?? Path.Combine(AppContext.BaseDirectory, "PulseNet-Broadcaster.exe");
+        var currentPid = Process.GetCurrentProcess().Id;
 
         var tempDir = Path.Combine(Path.GetTempPath(), "pulsenet_update");
         Directory.CreateDirectory(tempDir);
@@ -49,21 +91,94 @@ internal static class SelfUpdateService
         log?.LogInformation("Downloading MSI from {Url}", msiUrl);
         using var response = await _http.GetAsync(msiUrl, HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
-        await using var src  = await response.Content.ReadAsStreamAsync();
-        await using var dest = File.Create(tempMsi);
-        await src.CopyToAsync(dest);
+        await using (var src  = await response.Content.ReadAsStreamAsync())
+        await using (var dest = File.Create(tempMsi))
+            await src.CopyToAsync(dest);
         log?.LogInformation("MSI download complete — saved to {Msi}", tempMsi);
 
-        // PowerShell script: run msiexec and wait for it to finish, then relaunch.
-        // Exit codes 0 (success) and 3010 (success, reboot suggested) both mean the
-        // install completed — relaunch in both cases since we pass /norestart.
+        // Clear previous status file so a stale failure doesn't mask a success,
+        // and so the startup check only reports results from this attempt.
+        ClearLastResult();
+
+        // PS script responsibilities:
+        //  1. Wait for our PID to exit so msiexec can overwrite the locked exe.
+        //     (Portable path already does this; MSI path historically didn't —
+        //     likely cause of silent install failures on slow shutdowns.)
+        //  2. Run msiexec with /qb (basic UI with progress). /passive was
+        //     flagged heuristically by Bitdefender / Malwarebytes on our
+        //     unsigned MSI; /qb shows a visible progress window, which is
+        //     closer to user-initiated install behaviour.
+        //  3. Tee an MSI verbose log (/l*v) to update.msi.log for diagnostics.
+        //  4. Persist a JSON status file so the next launch can surface failure.
+        //  5. Relaunch the app only on exit codes 0 / 3010 (success / reboot-
+        //     suggested, both post-install-complete since we pass /norestart).
+        var logEsc       = EscapeSingleQuoted(UpdateLogPath);
+        var msiLogEsc    = EscapeSingleQuoted(MsiLogPath);
+        var statusEsc    = EscapeSingleQuoted(UpdateStatusPath);
+        var msiEsc       = EscapeSingleQuoted(tempMsi);
+        var exeEsc       = EscapeSingleQuoted(currentExe);
+
         var script = $$"""
-            $msi = '{{tempMsi}}'
-            $exe = '{{currentExe}}'
-            $p = Start-Process msiexec.exe -ArgumentList "/i `"$msi`" /passive /norestart" -Wait -PassThru
-            if ($p.ExitCode -eq 0 -or $p.ExitCode -eq 3010) {
-                Start-Sleep -Seconds 1
-                Start-Process $exe
+            $ErrorActionPreference = 'Continue'
+            $target  = {{currentPid}}
+            $msi     = '{{msiEsc}}'
+            $exe     = '{{exeEsc}}'
+            $log     = '{{logEsc}}'
+            $msiLog  = '{{msiLogEsc}}'
+            $status  = '{{statusEsc}}'
+
+            function Write-UpdateLog($msg) {
+                $line = '[' + (Get-Date -Format 'yyyy-MM-dd HH:mm:ss') + '] ' + $msg
+                try { Add-Content -Path $log -Value $line -ErrorAction SilentlyContinue } catch {}
+            }
+
+            try {
+                Write-UpdateLog ('--- Update start — PID ' + $target + ' ---')
+                Write-UpdateLog ('MSI: ' + $msi)
+
+                for ($i = 0; $i -lt 60; $i++) {
+                    if (-not (Get-Process -Id $target -ErrorAction SilentlyContinue)) { break }
+                    Start-Sleep -Milliseconds 500
+                }
+                if (Get-Process -Id $target -ErrorAction SilentlyContinue) {
+                    Write-UpdateLog 'WARNING: old process did not exit within 30s — continuing anyway'
+                } else {
+                    Write-UpdateLog 'Old process exited'
+                }
+
+                $cmdArgs = '/i "' + $msi + '" /qb /norestart /l*v "' + $msiLog + '"'
+                Write-UpdateLog ('Running: msiexec.exe ' + $cmdArgs)
+                $p = Start-Process msiexec.exe -ArgumentList $cmdArgs -Wait -PassThru
+                $code = $p.ExitCode
+                Write-UpdateLog ('msiexec exit code: ' + $code)
+
+                $success = ($code -eq 0 -or $code -eq 3010)
+                $obj = [PSCustomObject]@{
+                    timestamp = (Get-Date).ToString('o')
+                    success   = $success
+                    exitCode  = $code
+                    msiPath   = $msi
+                }
+                $obj | ConvertTo-Json -Compress | Set-Content -Path $status -Encoding UTF8
+
+                if ($success) {
+                    Start-Sleep -Seconds 1
+                    Start-Process $exe
+                    Write-UpdateLog 'Relaunched application'
+                } else {
+                    Write-UpdateLog ('Update failed — MSI kept at ' + $msi + ' for manual retry')
+                }
+            } catch {
+                Write-UpdateLog ('Script exception: ' + $_.Exception.Message)
+                try {
+                    $obj = [PSCustomObject]@{
+                        timestamp = (Get-Date).ToString('o')
+                        success   = $false
+                        exitCode  = -1
+                        msiPath   = $msi
+                    }
+                    $obj | ConvertTo-Json -Compress | Set-Content -Path $status -Encoding UTF8
+                } catch {}
             }
             """;
 
@@ -81,6 +196,9 @@ internal static class SelfUpdateService
 
         quit();
     }
+
+    // PowerShell single-quoted strings: only the ' character needs escaping (doubled).
+    private static string EscapeSingleQuoted(string value) => value.Replace("'", "''");
 
     private static async Task ApplyPortableAsync(string exeUrl, Action quit, ILogger? log)
     {

@@ -57,6 +57,20 @@ public partial class App : Application
         _trayIcon = new TrayIcon();
         _trayIcon.ExitRequested += (_, _) => Dispatcher.Invoke(Shutdown);
 
+        // Surface a previously-failed MSI update: if the last auto-update attempt
+        // wrote a failure status, show a tray balloon and expose a manual retry.
+        // Clearing the status prevents repeat warnings on later launches.
+        var lastUpdate = Services.SelfUpdateService.ReadLastResult();
+        if (lastUpdate is { Success: false })
+        {
+            _trayIcon.SetPendingUpdateRetry(lastUpdate.MsiPath);
+            _trayIcon.ShowBalloon(
+                "Update didn't install",
+                $"msiexec returned {lastUpdate.ExitCode}. Right-click the tray icon → Retry failed update.",
+                System.Windows.Forms.ToolTipIcon.Warning);
+            Services.SelfUpdateService.ClearLastResult();
+        }
+
         // Rename WebView2 audio sessions so they show as "PulseNet Player"
         // in Volume Mixer / Sonar / Wavelink instead of "msedgewebview2".
         var audioLog = _host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("AudioSessionRenamer");

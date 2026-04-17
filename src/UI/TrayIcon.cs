@@ -1,5 +1,6 @@
 namespace pulsenet.UI;
 
+using System.Diagnostics;
 using System.Drawing;
 using System.Reflection;
 using System.Windows.Forms;
@@ -12,6 +13,8 @@ public sealed class TrayIcon : IDisposable
     private readonly NotifyIcon _notifyIcon;
     private readonly Icon _iconDefault;
     private readonly Icon _iconActive;
+    private readonly ToolStripMenuItem _retryUpdateItem;
+    private string? _pendingMsiPath;
 
     public event EventHandler? ExitRequested;
 
@@ -28,6 +31,9 @@ public sealed class TrayIcon : IDisposable
         };
 
         var menu = new ContextMenuStrip();
+        _retryUpdateItem = new ToolStripMenuItem("Retry failed update...", null, OnRetryUpdate) { Visible = false };
+        menu.Items.Add(_retryUpdateItem);
+        menu.Items.Add(new ToolStripSeparator { Visible = false });
         menu.Items.Add("Exit", null, (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty));
         _notifyIcon.ContextMenuStrip = menu;
     }
@@ -37,6 +43,38 @@ public sealed class TrayIcon : IDisposable
 
     public void ShowBalloon(string title, string message, ToolTipIcon icon = ToolTipIcon.Info)
         => _notifyIcon.ShowBalloonTip(3000, title, message, icon);
+
+    /// <summary>
+    /// Expose a "Retry failed update..." item in the context menu. When clicked it
+    /// launches the cached MSI via ShellExecute — the same path a user would take
+    /// by double-clicking the installer, so AV never treats it as heuristic.
+    /// </summary>
+    public void SetPendingUpdateRetry(string msiPath)
+    {
+        _pendingMsiPath = msiPath;
+        _retryUpdateItem.Visible = true;
+        // Show the separator that sits right after the retry item.
+        if (_notifyIcon.ContextMenuStrip is { } strip && strip.Items.Count > 1)
+            strip.Items[1].Visible = true;
+    }
+
+    private void OnRetryUpdate(object? sender, EventArgs e)
+    {
+        if (string.IsNullOrEmpty(_pendingMsiPath) || !System.IO.File.Exists(_pendingMsiPath))
+        {
+            ShowBalloon("Retry update", "The cached installer is no longer available.", ToolTipIcon.Warning);
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(_pendingMsiPath) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            ShowBalloon("Retry update failed", ex.Message, ToolTipIcon.Error);
+        }
+    }
 
     public void Dispose()
     {
