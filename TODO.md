@@ -37,9 +37,18 @@
 ## Player features
 
 - [x] Volume control — handled by the YouTube embed's own controls
+- [ ] **Dedicated volume control** — tester feedback: YouTube embed controls aren't enough, users are reaching for the Windows mixer. Add an in-overlay volume slider/knob.
 - [x] "Now Playing" info — track title rendered inside the YouTube embed
 - [x] Shuffle — configured per station on the source YouTube channel/playlist
 - [x] Loop — configured per station on the source YouTube channel/playlist
+
+## Tester feedback (2026-04-18 beta)
+
+- [x] **Recover from off-screen / tiny window** — tray menu now exposes "Reset window position" which restores zoom to 100%, recenters on the primary monitor, and saves. Hotkey-based reset still TBD if needed.
+- [ ] **F9 toggle disappears the window when small** — pressing F9 sometimes makes it vanish entirely, especially at 20% zoom. Investigate visibility toggle interaction with very small window sizes.
+- [ ] **Drag offset on high-DPI monitors** — on a 125% scaled monitor the window lands ~50px to the right of where it was dropped; works fine on a 100% monitor. DPI-awareness bug in the JS-initiated drag math.
+- [x] **Click-blocker on PulseNet LIVE button** — added `#click-blocker-tl` (645×60) over the top-left of the video, neutralising YouTube's channel/title link so it can no longer spawn external browser players. Volume + settings controls (bottom-right of YouTube chrome) remain reachable.
+- [ ] **Investigate F-key fullscreen toggle** — tester reports F toggles a maximized YouTube view; not reproducible on Mallachi's local setup. Confirm whether this is a YouTube embed shortcut leaking through, and decide whether to suppress it.
 
 ## Settings
 
@@ -56,6 +65,11 @@
 - [x] Stable asset naming — `PulseNet-Player.exe` + `PulseNet-Setup.msi`
 - [x] **Enable GitHub Pages** — live at https://diftic.github.io/PulseNet-Player/ (branch: master, folder: /docs)
 - [ ] **External beta testing** — 60-day public beta starting 2026-04-18; bump to **v1.0.0** on/after 2026-06-17 for the stable, out-of-beta release
+
+## Pending verification
+
+- [ ] **Hover-to-control hotkeys on API stations** — Space, M, ←/→, ↑/↓ wired via global keyboard hook + YT IFrame API; gated on `_cursorOverVideo` (mouseenter on `#video-wrap`) and `_canForwardKeys` (API player ready, not live-stream). Not testable until a non-live playlist station is wired. Live stream (`PulseNet LIVE`) has no IFrame API surface so it intentionally falls through to the click-then-keys flow.
+- [ ] **Hover-to-control on live streams** — would require either swapping the raw live-stream `<iframe>` for a `YT.Player`-wrapped equivalent, or synthesising focus/click via SendInput. Punted until base hover-to-control is verified on an API station.
 
 ## Known issues / notes
 

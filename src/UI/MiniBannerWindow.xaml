@@ -1,0 +1,23 @@
+<Window x:Class="pulsenet.UI.MiniBannerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        WindowStyle="None"
+        ShowInTaskbar="False"
+        Topmost="True"
+        ShowActivated="False"
+        AllowsTransparency="True"
+        WindowStartupLocation="Manual"
+        Visibility="Collapsed"
+        Title="PulseNet Banner">
+    <Window.Background>
+        <!-- alpha=1/255, visually invisible but non-zero. Without this the WPF layered
+             surface reports alpha=0 everywhere and clicks pass through at the OS
+             level regardless of WS_EX_TRANSPARENT, making edit-mode drag impossible. -->
+        <SolidColorBrush Color="#01000000"/>
+    </Window.Background>
+
+    <Grid>
+        <wv2:WebView2 x:Name="WebView" />
+    </Grid>
+</Window>

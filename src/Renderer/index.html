@@ -15,6 +15,9 @@
       <!-- Transparent barrier over the bottom 70px — swallows clicks so the
            user can't reach YouTube's "More videos" / "Share" overlay buttons. -->
       <div id="click-blocker" aria-hidden="true"></div>
+      <!-- Top-left barrier (645×60) — swallows clicks on YouTube's channel
+           avatar / title link in the upper-left of the player chrome. -->
+      <div id="click-blocker-tl" aria-hidden="true"></div>
     </div>
 
     <!-- Layer 2: Sci-fi frame (no glow, structural) -->
@@ -52,18 +55,53 @@
         <button id="lock-btn" class="settings-action-btn">&#x1F513; Unlocked</button>
       </div>
       <div class="settings-row">
+        <button id="miniplayer-settings-btn" class="settings-action-btn">Miniplayer Settings</button>
+      </div>
+      <div class="settings-row">
         <span class="settings-label">Opacity</span>
         <input type="range" id="opacity-slider" class="settings-slider" min="20" max="100" value="100">
         <span class="settings-val" id="opacity-val">100%</span>
       </div>
       <div class="settings-row">
         <button class="settings-action-btn" id="zoom-down-btn">-10% size</button>
-        <input type="number" id="zoom-input" class="settings-zoom-input" min="20" max="100" value="100">
+        <input type="number" id="zoom-input" class="settings-zoom-input" min="30" max="100" value="100">
         <button class="settings-action-btn" id="zoom-up-btn">+10% size</button>
       </div>
       <div class="settings-row">
         <span class="settings-label">Hotkey</span>
         <input type="text" id="hotkey-input" class="settings-hotkey-input" readonly placeholder="Click, then press keys">
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">Minimize to</span>
+        <select id="minimize-mode-select" class="settings-select">
+          <option value="Banner">Banner (lower-right)</option>
+          <option value="Tray">System tray</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Layer 5b: Miniplayer Settings sub-panel — same anchor as #settings-panel,
+         shown when the Miniplayer Settings button is clicked. -->
+    <div id="miniplayer-settings-panel" class="hidden">
+      <div class="settings-row">
+        <button id="miniplayer-back-btn" class="settings-action-btn">&#x2190; Back</button>
+      </div>
+      <div class="settings-row">
+        <button id="banner-lock-btn" class="settings-action-btn">&#x1F513; Banner unlocked</button>
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">Banner opacity</span>
+        <input type="range" id="banner-opacity-slider" class="settings-slider" min="20" max="100" value="100">
+        <span class="settings-val" id="banner-opacity-val">100%</span>
+      </div>
+      <div class="settings-row">
+        <span class="settings-label">Scale</span>
+        <button class="settings-action-btn" id="banner-scale-down-btn">-10%</button>
+        <input type="number" id="banner-scale-input" class="settings-zoom-input" min="20" max="120" value="100">
+        <button class="settings-action-btn" id="banner-scale-up-btn">+10%</button>
+      </div>
+      <div class="settings-row">
+        <button id="banner-reset-btn" class="settings-action-btn">Reset to centre</button>
       </div>
     </div>
 

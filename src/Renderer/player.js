@@ -112,11 +112,20 @@
     });
   }
 
+  function postCurrentStation(label) {
+    try {
+      window.chrome.webview.postMessage(JSON.stringify({ type: 'currentStation', label: label }));
+    } catch (_) {}
+  }
+
   function activateStation(station, btn) {
     if (activeBtn) activeBtn.classList.remove('active');
     activeBtn = btn;
     btn.classList.add('active');
     hideIdleLogo();
+    postCurrentStation(station.label);
+    // Track title resets on station switch — clear so the next poll re-pushes.
+    lastReportedTitle = '';
 
     // Coming back from a live_stream iframe, or API player not yet built —
     // rebuild the YT.Player, then hand the station over once it's ready.
@@ -156,6 +165,7 @@
     }
     player = null;
     playerReady = false;
+    postKeyForwardCapable();
 
     // YT.Player replaces #player (a <div>) with an <iframe> of the same id.
     // Restore a clean <div id="player"> so the next creation has something
@@ -202,6 +212,7 @@
       events: {
         onReady: function () {
           playerReady = true;
+          postKeyForwardCapable();
           if (onReadyCb) {
             onReadyCb();
           } else if (pendingVideoId) {
@@ -221,6 +232,7 @@
   function loadLiveStream(chId) {
     teardownPlayer();
     liveStreamActive = true;
+    postKeyForwardCapable();
 
     var div = document.getElementById('player');
     if (!div) return;
@@ -234,6 +246,70 @@
     iframe.style.height = '100%';
     div.appendChild(iframe);
   }
+
+  // ---- Key-forward capability push ----
+  // C# only swallows allow-listed keys when forwarding will succeed. For the
+  // raw live-stream iframe (no IFrame API) and the moments before YT.Player is
+  // ready we report false so YouTube's native click-then-keys flow continues
+  // to work.
+  function postKeyForwardCapable() {
+    var canForward = !liveStreamActive && playerReady && !!player;
+    try {
+      window.chrome.webview.postMessage(JSON.stringify({ type: 'keyForwardCapable', value: canForward }));
+    } catch (_) {}
+  }
+
+  // ---- Hover state push for keyboard hook gating ----
+  // C#'s keyboard hook only forwards keys to the embed when the cursor is over
+  // #video-wrap. Tracked here in the DOM so it works at any DPI / zoom without
+  // any C#-side coordinate math.
+  (function () {
+    var wrap = document.getElementById('video-wrap');
+    if (!wrap) return;
+    function post(over) {
+      try {
+        window.chrome.webview.postMessage(JSON.stringify({ type: 'hoverVideo', over: over }));
+      } catch (_) {}
+    }
+    wrap.addEventListener('mouseenter', function () { post(true); });
+    wrap.addEventListener('mouseleave', function () { post(false); });
+  })();
+
+  // ---- Hover hotkey forwarder ----
+  // C# global keyboard hook intercepts a small allow-list of YouTube keys when
+  // the cursor is over the video rect (without stealing focus) and calls this
+  // function to drive the IFrame API directly. Live-stream raw iframes have no
+  // API surface so they're a no-op.
+  window.__pulsenetForwardKey = function (action) {
+    if (liveStreamActive) return;
+    if (!playerReady || !player) return;
+    try {
+      switch (action) {
+        case 'space':
+          var st = player.getPlayerState();
+          if (st === YT.PlayerState.PLAYING) player.pauseVideo();
+          else player.playVideo();
+          break;
+        case 'mute':
+          if (player.isMuted()) player.unMute();
+          else player.mute();
+          break;
+        case 'left':
+          player.seekTo(Math.max(0, player.getCurrentTime() - 5), true);
+          break;
+        case 'right':
+          player.seekTo(player.getCurrentTime() + 5, true);
+          break;
+        case 'up':
+          if (player.isMuted()) player.unMute();
+          player.setVolume(Math.min(100, player.getVolume() + 5));
+          break;
+        case 'down':
+          player.setVolume(Math.max(0, player.getVolume() - 5));
+          break;
+      }
+    } catch (_) {}
+  };
 
   // ---- Load YouTube IFrame API ----
   var tag = document.createElement('script');
@@ -261,13 +337,17 @@
   }
 
   // Track title polling (API fires no title-change event).
+  var lastReportedTitle = '';
   function updateTrackTitle() {
     if (!playerReady || !player) return;
     try {
       var data = player.getVideoData();
-      if (data && data.title) {
-        // Reserved for tray tooltip or future HUD element.
+      if (data && data.title && data.title !== lastReportedTitle) {
+        lastReportedTitle = data.title;
         window.__pulsenetNowPlaying = data.title;
+        try {
+          window.chrome.webview.postMessage(JSON.stringify({ type: 'nowPlaying', title: data.title }));
+        } catch (_) {}
       }
     } catch (_) {}
   }
@@ -294,6 +374,12 @@
       activeBtn = null;
       hideIdleLogo();
       loadLiveStream(PULSENET_LIVE_CHANNEL);
+      postCurrentStation('Pulse Broadcasting Network - LIVE Music');
+      // No track title from live_stream iframe — clear so the banner shows just the station.
+      lastReportedTitle = '';
+      try {
+        window.chrome.webview.postMessage(JSON.stringify({ type: 'nowPlaying', title: '' }));
+      } catch (_) {}
     });
   }
 
@@ -322,10 +408,20 @@
   var zoomUpBtn      = document.getElementById('zoom-up-btn');
   var zoomInput      = document.getElementById('zoom-input');
   var hotkeyInput    = document.getElementById('hotkey-input');
+  var minimizeSelect = document.getElementById('minimize-mode-select');
 
   if (settingsBtn) {
     settingsBtn.addEventListener('click', function (e) {
       e.stopPropagation();
+      // If the miniplayer sub-panel is open, fold it away first so we never end up
+      // with both panels visible. Also exits banner edit mode.
+      var miniplayerPanelEl = document.getElementById('miniplayer-settings-panel');
+      if (miniplayerPanelEl && !miniplayerPanelEl.classList.contains('hidden')) {
+        miniplayerPanelEl.classList.add('hidden');
+        try {
+          window.chrome.webview.postMessage(JSON.stringify({ type: 'bannerEditMode', value: false }));
+        } catch (_) {}
+      }
       settingsPanel.classList.toggle('hidden');
     });
   }
@@ -368,7 +464,7 @@
   }
 
   function sendZoom(pct) {
-    currentZoom = Math.min(100, Math.max(20, pct));
+    currentZoom = Math.min(100, Math.max(30, pct));
     if (zoomInput) zoomInput.value = currentZoom;
     try {
       window.chrome.webview.postMessage(JSON.stringify({ type: 'zoom', pct: currentZoom }));
@@ -443,6 +539,132 @@
     });
   }
 
+
+  if (minimizeSelect) {
+    minimizeSelect.addEventListener('change', function () {
+      try {
+        window.chrome.webview.postMessage(JSON.stringify({
+          type: 'minimizeMode',
+          value: minimizeSelect.value,
+        }));
+      } catch (_) {}
+    });
+  }
+
+  // ---- Miniplayer Settings sub-panel ----
+  // Swaps in over the main settings panel; the banner becomes interactable while
+  // open so the user can drag it (when unlocked) and see resize/opacity changes
+  // applied live.
+  var miniplayerBtn        = document.getElementById('miniplayer-settings-btn');
+  var miniplayerPanel      = document.getElementById('miniplayer-settings-panel');
+  var miniplayerBackBtn    = document.getElementById('miniplayer-back-btn');
+  var bannerLockBtn        = document.getElementById('banner-lock-btn');
+  var bannerOpacitySlider  = document.getElementById('banner-opacity-slider');
+  var bannerOpacityVal     = document.getElementById('banner-opacity-val');
+  var bannerScaleInput     = document.getElementById('banner-scale-input');
+  var bannerScaleDownBtn   = document.getElementById('banner-scale-down-btn');
+  var bannerScaleUpBtn     = document.getElementById('banner-scale-up-btn');
+  var bannerResetBtn       = document.getElementById('banner-reset-btn');
+
+  var bannerLocked = true;
+
+  function postBannerEdit(active) {
+    try {
+      window.chrome.webview.postMessage(JSON.stringify({ type: 'bannerEditMode', value: active }));
+    } catch (_) {}
+  }
+
+  function updateBannerLockBtn() {
+    if (!bannerLockBtn) return;
+    bannerLockBtn.textContent = bannerLocked ? '\uD83D\uDD12 Banner locked' : '\uD83D\uDD13 Banner unlocked';
+    bannerLockBtn.classList.toggle('locked', bannerLocked);
+  }
+
+  function showMiniplayerPanel() {
+    if (settingsPanel) settingsPanel.classList.add('hidden');
+    if (miniplayerPanel) miniplayerPanel.classList.remove('hidden');
+    postBannerEdit(true);
+  }
+
+  function hideMiniplayerPanel() {
+    if (miniplayerPanel) miniplayerPanel.classList.add('hidden');
+    if (settingsPanel) settingsPanel.classList.remove('hidden');
+    postBannerEdit(false);
+  }
+
+  if (miniplayerBtn) {
+    miniplayerBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      showMiniplayerPanel();
+    });
+  }
+
+  if (miniplayerBackBtn) {
+    miniplayerBackBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      hideMiniplayerPanel();
+    });
+  }
+
+  if (bannerLockBtn) {
+    bannerLockBtn.addEventListener('click', function () {
+      bannerLocked = !bannerLocked;
+      updateBannerLockBtn();
+      try {
+        window.chrome.webview.postMessage(JSON.stringify({ type: 'bannerLock', locked: bannerLocked }));
+      } catch (_) {}
+    });
+  }
+
+  if (bannerOpacitySlider) {
+    bannerOpacitySlider.addEventListener('input', function () {
+      var pct = parseInt(this.value, 10);
+      if (bannerOpacityVal) bannerOpacityVal.textContent = pct + '%';
+      // Map display 20-100 → actual opacity 0.20-1.00 directly.
+      var v = pct / 100;
+      try {
+        window.chrome.webview.postMessage(JSON.stringify({ type: 'bannerOpacity', value: v }));
+      } catch (_) {}
+    });
+  }
+
+  function sendBannerScale(pct) {
+    var clamped = Math.min(120, Math.max(20, pct));
+    if (bannerScaleInput) bannerScaleInput.value = clamped;
+    try {
+      window.chrome.webview.postMessage(JSON.stringify({ type: 'bannerScale', value: clamped }));
+    } catch (_) {}
+  }
+
+  function currentBannerScale() {
+    if (bannerScaleInput) {
+      var v = parseInt(bannerScaleInput.value, 10);
+      if (!isNaN(v)) return v;
+    }
+    return 100;
+  }
+
+  if (bannerScaleDownBtn) {
+    bannerScaleDownBtn.addEventListener('click', function () { sendBannerScale(currentBannerScale() - 10); });
+  }
+  if (bannerScaleUpBtn) {
+    bannerScaleUpBtn.addEventListener('click', function () { sendBannerScale(currentBannerScale() + 10); });
+  }
+  if (bannerScaleInput) {
+    bannerScaleInput.addEventListener('change', function () {
+      var v = parseInt(this.value, 10);
+      if (isNaN(v)) v = 100;
+      sendBannerScale(v);
+    });
+  }
+
+  if (bannerResetBtn) {
+    bannerResetBtn.addEventListener('click', function () {
+      try {
+        window.chrome.webview.postMessage(JSON.stringify({ type: 'bannerReset' }));
+      } catch (_) {}
+    });
+  }
 
   // Close panel on click outside
   document.addEventListener('click', function (e) {

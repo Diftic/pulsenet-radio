@@ -16,6 +16,7 @@ public sealed class TrayIcon : IDisposable
     private string? _pendingMsiPath;
 
     public event EventHandler? ExitRequested;
+    public event EventHandler? ResetWindowRequested;
 
     public TrayIcon()
     {
@@ -32,6 +33,8 @@ public sealed class TrayIcon : IDisposable
         _retryUpdateItem = new ToolStripMenuItem("Retry failed update...", null, OnRetryUpdate) { Visible = false };
         menu.Items.Add(_retryUpdateItem);
         menu.Items.Add(new ToolStripSeparator { Visible = false });
+        menu.Items.Add("Reset Player Window", null, (_, _) => ResetWindowRequested?.Invoke(this, EventArgs.Empty));
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (_, _) => ExitRequested?.Invoke(this, EventArgs.Empty));
         _notifyIcon.ContextMenuStrip = menu;
     }

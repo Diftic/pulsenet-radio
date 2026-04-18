@@ -83,6 +83,7 @@ LAYERED_WINDOW_ATTRIBUTES_FLAGS
 
 // Cursor
 SetCursorPos
+GetCursorPos
 
 // ProcessExitWatcher
 PROCESS_ACCESS_RIGHTS

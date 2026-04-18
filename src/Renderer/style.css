@@ -79,6 +79,18 @@ html, body {
   cursor: default;
 }
 
+/* ---- Top-left click-blocker — 645×60 over YouTube's channel/title link ---- */
+#click-blocker-tl {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 645px;
+  height: 60px;
+  z-index: 3;
+  background: transparent;
+  cursor: default;
+}
+
 /* ---- Idle logo — shown when no station is active ---- */
 #idle-logo {
   position: absolute;
@@ -145,8 +157,8 @@ html, body {
   gap: 17px;
 }
 
-#stations-left  { left: 47px;   width: 193px; top: 129px; } /* shifted down: home btn counts as item 1 */
-#stations-right { left: 956px;  width: 197px; }
+#stations-left  { left: 37px;   width: 193px; top: 129px; } /* shifted down: home btn counts as item 1 */
+#stations-right { left: 966px;  width: 197px; }
 
 /* ---- Station button ---- */
 .station-btn {
@@ -253,8 +265,8 @@ html, body {
 /* PulseNet home/live button — top of left column, one gap (17px) above first station btn */
 #pulsenet-home-btn {
   position: absolute;
-  /* Center in left col (left=47, w=193): 47 + (193-32)/2 = 127.5 */
-  left: 128px;
+  /* Center in left col (left=37, w=193): 37 + (193-32)/2 = 117.5 */
+  left: 118px;
   /* home counts as item 1; item 1 top = 316.5 - 236.5 = 80px */
   top: 80px;
   z-index: 4;
@@ -263,8 +275,8 @@ html, body {
 /* About button — bottom of right column, one gap (17px) below last station btn */
 #about-btn {
   position: absolute;
-  /* Center in right col (left=956, w=197): 956 + (197-32)/2 = 1038.5 */
-  left: 1039px;
+  /* Center in right col (left=966, w=197): 966 + (197-32)/2 = 1048.5 */
+  left: 1049px;
   /* btn9 bottom = 80 + 8×49 + 32 = 504px → 504 + 17gap = 521px */
   top: 521px;
   z-index: 4;
@@ -326,6 +338,29 @@ html, body {
 }
 
 #settings-panel.hidden {
+  display: none;
+}
+
+/* Miniplayer Settings sub-panel — same anchor/dimensions as #settings-panel.
+   Replaces the main panel when the user enters the Miniplayer Settings page. */
+#miniplayer-settings-panel {
+  position: absolute;
+  left: 348px;
+  bottom: 62px;
+  width: 500px;
+  z-index: 6;
+  pointer-events: auto;
+  background: rgba(0, 10, 25, 0.90);
+  border: 1px solid rgba(34, 211, 238, 0.30);
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  user-select: none;
+}
+
+#miniplayer-settings-panel.hidden {
   display: none;
 }
 
@@ -461,4 +496,30 @@ html, body {
 .settings-hotkey-input:focus {
   border-color: rgba(34, 211, 238, 0.70);
   box-shadow: 0 0 6px rgba(34, 211, 238, 0.20);
+}
+
+.settings-select {
+  flex: 1;
+  height: 40px;
+  background: rgba(0, 15, 35, 0.55);
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: 6px;
+  color: #22d3ee;
+  font-family: 'Consolas', monospace;
+  font-size: 14px;
+  outline: none;
+  cursor: pointer;
+  padding: 0 8px;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.settings-select:focus {
+  border-color: rgba(34, 211, 238, 0.70);
+  box-shadow: 0 0 6px rgba(34, 211, 238, 0.20);
+}
+
+.settings-select option {
+  background: #02101a;
+  color: #cfeefa;
 }

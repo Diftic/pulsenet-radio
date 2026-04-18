@@ -32,6 +32,28 @@ public partial class OverlayWindow : Window
     private Thread? _mouseHookThread;
     private uint _mouseHookThreadId;
 
+    // Global low-level keyboard hook — forwards an allow-list of YouTube playback /
+    // volume keys to the embed when the cursor is over the video rect, without
+    // requiring the user to click the video first.
+    private UnhookWindowsHookExSafeHandle? _keyboardHookHandle;
+    private HHOOK _keyboardHookId = HHOOK.Null;
+    private HOOKPROC? _keyboardHookProc;
+    private Thread? _keyboardHookThread;
+    private uint _keyboardHookThreadId;
+    private readonly HashSet<uint> _hoverKeysDown = new();
+
+    // Allow-list: YouTube playback + volume keys. vk → renderer-side action name.
+    private static readonly Dictionary<uint, string> HoverForwardKeys = new()
+    {
+        [0x20] = "space", // VK_SPACE  — play/pause
+        [0x4B] = "space", // K         — play/pause (YouTube alias)
+        [0x4D] = "mute",  // M         — mute toggle
+        [0x25] = "left",  // VK_LEFT   — seek -5s
+        [0x27] = "right", // VK_RIGHT  — seek +5s
+        [0x26] = "up",    // VK_UP     — volume +5
+        [0x28] = "down",  // VK_DOWN   — volume -5
+    };
+
     private CoreWebView2Environment? _env;
     private bool   _webViewReady;
     private bool   _isVisible;
@@ -49,6 +71,13 @@ public partial class OverlayWindow : Window
     public event EventHandler? OverlayShown;
     public event EventHandler? OverlayHidden;
     public event Action<string, string>? BalloonTipRequested;
+    public event Action<string>? NowPlayingChanged;
+    public event Action<string>? StationChanged;
+    public event Action<bool>?   BannerEditModeChanged;
+    public event Action<bool>?   BannerLockChanged;
+    public event Action<double>? BannerOpacityChanged;
+    public event Action<int>? BannerScaleChanged;
+    public event Action?         BannerResetRequested;
 
     public OverlayWindow(
         SettingsManager settings,
@@ -89,6 +118,33 @@ public partial class OverlayWindow : Window
             HideOverlay(restoreFocus: false);
     }
 
+    /// <summary>
+    /// Recovery action invoked from the tray menu: restore zoom to 100%, re-centre on
+    /// the primary monitor, persist, and ensure the overlay is visible. Lets a tester
+    /// recover when the window has been resized tiny and dragged off-screen.
+    /// </summary>
+    public void ResetWindow()
+    {
+        Dispatcher.Invoke(() =>
+        {
+            ApplyZoom(100);
+            CenterOnScreen();
+            _settings.Save(_settings.Current with
+            {
+                WindowLeft = Left,
+                WindowTop = Top,
+                WebViewZoomPct = _zoomPct,
+            });
+            EnsureVisible();
+            // Push the new zoom value into the settings panel's input so the displayed
+            // value matches the actual state. ShowOverlay already syncs on first show,
+            // but a reset while the overlay is already visible needs an explicit push.
+            if (_webViewReady)
+                _ = WebView.CoreWebView2.ExecuteScriptAsync(BuildSyncScript(_opacity, _zoomPct));
+            _logger.LogInformation("Window reset to default size and centred on primary monitor");
+        });
+    }
+
     // -------------------------------------------------------------------------
     // Lifecycle
     // -------------------------------------------------------------------------
@@ -108,6 +164,7 @@ public partial class OverlayWindow : Window
 
         // Mouse hook proc delegate kept alive here; thread is started/stopped with the overlay.
         _mouseHookProc = MouseHookProc;
+        _keyboardHookProc = KeyboardHookProc;
 
         // Hide from Alt+Tab.  Activation prevention is handled in WndProc via
         // WM_MOUSEACTIVATE → MA_NOACTIVATE, and in XAML via ShowActivated="False".
@@ -129,6 +186,7 @@ public partial class OverlayWindow : Window
     {
         _settings.SettingsChanged -= OnSettingsChanged;
         StopMouseHook();
+        StopKeyboardHook();
         base.OnClosed(e);
     }
 
@@ -145,6 +203,7 @@ public partial class OverlayWindow : Window
         }
 
         StartMouseHook();
+        StartKeyboardHook();
 
         var s = _settings.Current;
         if (s.WindowLeft.HasValue && s.WindowTop.HasValue)
@@ -175,6 +234,7 @@ public partial class OverlayWindow : Window
     private void HideOverlay(bool restoreFocus)
     {
         StopMouseHook();
+        StopKeyboardHook();
         _settings.Save(_settings.Current with { WindowLeft = Left, WindowTop = Top, WebViewZoomPct = _zoomPct });
 
         _isVisible = false;
@@ -290,7 +350,7 @@ public partial class OverlayWindow : Window
 
     public void ApplyZoom(int zoomPct)
     {
-        _zoomPct = Math.Clamp(zoomPct, 20, 100);
+        _zoomPct = Math.Clamp(zoomPct, 30, 100);
         _logger.LogDebug("ApplyZoom: {Zoom}%", _zoomPct);
         double factor = _zoomPct / 100.0;
         // Resize the window and scale WebView2 content in the same operation to avoid blink.
@@ -349,6 +409,50 @@ public partial class OverlayWindow : Window
                     _hotkeyListener.Paused = root.GetProperty("active").GetBoolean();
                     break;
 
+                case "hoverVideo":
+                    _cursorOverVideo = root.GetProperty("over").GetBoolean();
+                    break;
+
+                case "keyForwardCapable":
+                    _canForwardKeys = root.GetProperty("value").GetBoolean();
+                    break;
+
+                case "nowPlaying":
+                    var title = root.GetProperty("title").GetString() ?? string.Empty;
+                    NowPlayingChanged?.Invoke(title);
+                    break;
+
+                case "currentStation":
+                    var label = root.GetProperty("label").GetString() ?? string.Empty;
+                    StationChanged?.Invoke(label);
+                    break;
+
+                case "bannerEditMode":
+                    BannerEditModeChanged?.Invoke(root.GetProperty("value").GetBoolean());
+                    break;
+
+                case "bannerLock":
+                    BannerLockChanged?.Invoke(root.GetProperty("locked").GetBoolean());
+                    break;
+
+                case "bannerOpacity":
+                    BannerOpacityChanged?.Invoke(root.GetProperty("value").GetDouble());
+                    break;
+
+                case "bannerScale":
+                    BannerScaleChanged?.Invoke(root.GetProperty("value").GetInt32());
+                    break;
+
+                case "bannerReset":
+                    BannerResetRequested?.Invoke();
+                    break;
+
+                case "minimizeMode":
+                    var modeStr = root.GetProperty("value").GetString();
+                    if (Enum.TryParse<Models.MinimizeMode>(modeStr, ignoreCase: true, out var mode))
+                        _settings.Save(_settings.Current with { MinimizeMode = mode });
+                    break;
+
                 case "openUrl":
                     OpenInDefaultBrowser(root.GetProperty("url").GetString());
                     break;
@@ -394,14 +498,35 @@ public partial class OverlayWindow : Window
     {
         int opacityDisplay = (int)Math.Round((opacity - 0.30) / 0.70 * 100);
         var hotkeyLabel = System.Text.Json.JsonSerializer.Serialize(_settings.Current.ToggleHotkey.ToString());
+        var minimizeMode = System.Text.Json.JsonSerializer.Serialize(_settings.Current.MinimizeMode.ToString());
+        var s = _settings.Current;
+        int bannerScale = s.BannerScalePct;
+        int bannerOp = (int)Math.Round(s.BannerOpacity * 100);
+        var bannerLockText = s.BannerLocked
+            ? "\\uD83D\\uDD12 Banner locked"
+            : "\\uD83D\\uDD13 Banner unlocked";
         return $"(function(){{" +
                $"var os=document.getElementById('opacity-slider');" +
                $"var ov=document.getElementById('opacity-val');" +
                $"var zi=document.getElementById('zoom-input');" +
                $"var hi=document.getElementById('hotkey-input');" +
+               $"var ms=document.getElementById('minimize-mode-select');" +
+               $"var sp=document.getElementById('settings-panel');" +
+               $"var mp=document.getElementById('miniplayer-settings-panel');" +
+               $"var bsc=document.getElementById('banner-scale-input');" +
+               $"var bos=document.getElementById('banner-opacity-slider');" +
+               $"var bov=document.getElementById('banner-opacity-val');" +
+               $"var blb=document.getElementById('banner-lock-btn');" +
                $"if(os){{os.value={opacityDisplay};if(ov)ov.textContent='{opacityDisplay}%';}}" +
                $"if(zi)zi.value={zoomPct};" +
                $"if(hi)hi.value={hotkeyLabel};" +
+               $"if(ms)ms.value={minimizeMode};" +
+               $"if(bsc)bsc.value={bannerScale};" +
+               $"if(bos){{bos.value={bannerOp};if(bov)bov.textContent='{bannerOp}%';}}" +
+               $"if(blb){{blb.textContent='{bannerLockText}';blb.classList.toggle('locked',{(s.BannerLocked ? "true" : "false")});}}" +
+               // Reset to main settings page when overlay re-opens.
+               $"if(sp)sp.classList.add('hidden');" +
+               $"if(mp)mp.classList.add('hidden');" +
                $"}})();";
     }
 
@@ -533,6 +658,113 @@ public partial class OverlayWindow : Window
 
         return PInvoke.CallNextHookEx(_mouseHookId, nCode, wparam, lparam);
     }
+
+    // -------------------------------------------------------------------------
+    // Global keyboard hook — WH_KEYBOARD_LL forwards a small allow-list of
+    // YouTube playback / volume keys to the embed when the cursor hovers the
+    // video rect. Without this the user has to click the video to give the
+    // iframe focus before the embed responds to keys, which the non-activating
+    // overlay design otherwise prevents.
+    // -------------------------------------------------------------------------
+
+    private void StartKeyboardHook()
+    {
+        if (_keyboardHookThread is { IsAlive: true }) return;
+        _hoverKeysDown.Clear();
+        _keyboardHookThread = new Thread(RunKeyboardHook) { IsBackground = true, Name = "KeyboardHook" };
+        _keyboardHookThread.Start();
+    }
+
+    private void StopKeyboardHook()
+    {
+        if (_keyboardHookThreadId != 0)
+            PInvoke.PostThreadMessage(_keyboardHookThreadId, PInvoke.WM_QUIT, 0, 0);
+        _keyboardHookHandle?.Dispose();
+        _keyboardHookHandle = null;
+        _keyboardHookId = HHOOK.Null;
+        _keyboardHookThreadId = 0;
+        _hoverKeysDown.Clear();
+    }
+
+    private void RunKeyboardHook()
+    {
+        _keyboardHookThreadId = PInvoke.GetCurrentThreadId();
+
+        var handle = PInvoke.SetWindowsHookEx(WINDOWS_HOOK_ID.WH_KEYBOARD_LL, _keyboardHookProc!, default, 0);
+        if (handle.IsInvalid)
+        {
+            _logger.LogWarning("Failed to install keyboard hook");
+            return;
+        }
+
+        _keyboardHookHandle = handle;
+        _keyboardHookId = new HHOOK(handle.DangerousGetHandle());
+        _logger.LogInformation("Keyboard hook installed");
+
+        while (PInvoke.GetMessage(out var msg, HWND.Null, 0, 0))
+        {
+            PInvoke.TranslateMessage(in msg);
+            PInvoke.DispatchMessage(in msg);
+        }
+    }
+
+    private LRESULT KeyboardHookProc(int nCode, WPARAM wparam, LPARAM lparam)
+    {
+        const uint WM_KEYDOWN    = 0x0100;
+        const uint WM_KEYUP      = 0x0101;
+        const uint WM_SYSKEYDOWN = 0x0104;
+        const uint WM_SYSKEYUP   = 0x0105;
+
+        if (nCode >= 0 && _isVisible && _webViewReady)
+        {
+            var msg = (uint)wparam.Value;
+            bool isDown = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
+            bool isUp   = msg == WM_KEYUP   || msg == WM_SYSKEYUP;
+
+            if (isDown || isUp)
+            {
+                var kbd = Marshal.PtrToStructure<KBDLLHOOKSTRUCT>(lparam);
+                if (HoverForwardKeys.TryGetValue(kbd.vkCode, out var action)
+                    && _cursorOverVideo
+                    && _canForwardKeys)
+                {
+                    if (isDown)
+                    {
+                        // Skip auto-repeat: only forward on transition up→down so a
+                        // held Space/M doesn't toggle play/mute repeatedly.
+                        if (_hoverKeysDown.Add(kbd.vkCode))
+                        {
+                            var name = action;
+                            Dispatcher.InvokeAsync(() =>
+                            {
+                                if (_webViewReady)
+                                    _ = WebView.CoreWebView2.ExecuteScriptAsync(
+                                        $"window.__pulsenetForwardKey&&window.__pulsenetForwardKey('{name}');");
+                            });
+                        }
+                    }
+                    else
+                    {
+                        _hoverKeysDown.Remove(kbd.vkCode);
+                    }
+                    return (LRESULT)1; // swallow so the foreground app doesn't also receive it
+                }
+            }
+        }
+
+        return PInvoke.CallNextHookEx(_keyboardHookId, nCode, wparam, lparam);
+    }
+
+    // Hover state pushed by the renderer (mouseover/mouseleave on #video-wrap).
+    // Avoids DPI/zoom math — the renderer always knows precisely when the cursor
+    // is over the video element, regardless of monitor DPI or window zoom.
+    private volatile bool _cursorOverVideo;
+
+    // Pushed by the renderer whenever the API player is created/destroyed or the
+    // user toggles between API mode and the raw live-stream iframe. The hook
+    // only swallows keys when we're actually able to forward them — otherwise
+    // it falls through, preserving YouTube's native click-then-keys flow.
+    private volatile bool _canForwardKeys;
 
     // -------------------------------------------------------------------------
     // Scroll forwarding via WndProc

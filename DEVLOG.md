@@ -4,6 +4,61 @@
 
 ---
 
+## 2026-04-18 — Session 9 — v0.4.0 — Mini banner + Miniplayer Settings
+
+### Minimise to banner
+New tri-state window lifecycle for overlay + banner: `Hidden ↔ Banner ↔ Full`. Added `MinimizeMode` setting (`Banner` default, `Tray` opt-in) selectable in the main settings panel. Hotkey cycles Full ↔ Banner in banner mode, Full ↔ Hidden in tray mode. `MiniBannerWindow` is a separate WPF + WebView2 window, `WS_EX_TRANSPARENT` + `WS_EX_TOOLWINDOW`, alpha=1/255 background (so OS hit-testing still functions when WS_EX_TRANSPARENT is cleared in edit mode), sharing the Renderer virtual host but with its own WebView2 cache folder (`WebView2BannerCache`) because the overlay env uses `--disk-cache-size=0` and mismatched options on the same userDataFolder silently fails `CoreWebView2Environment.CreateAsync`.
+
+### Banner content
+Three rows served from `banner.html` via `PostWebMessageAsJson`: station label (pushed on `activateStation` / home-button click), track title (polled by player.js and pushed on change, hidden when empty), and hotkey hint (seeded from `ToggleHotkey`, re-synced on settings change). Home-button label is `Pulse Broadcasting Network - LIVE Music`.
+
+### Miniplayer Settings sub-panel
+New button in the main settings menu (between Lock and Minimize-mode rows) opens a sub-panel that takes the same anchor as the main panel. While open the banner enters edit mode: `WS_EX_TRANSPARENT` is cleared (and `SWP_FRAMECHANGED` forced so the style change actually takes effect), so clicks reach the banner. Sub-panel exposes: banner lock toggle (independent of main overlay lock), banner opacity slider (20–100% applied via body opacity), scale control (20–120% default 100, drives both window Width/Height and `WebView.ZoomFactor` so content scales with the frame), and a `Reset to centre` button that re-centres on the working area.
+
+### Drag implementation
+The obvious `WndProc` → `WM_NCHITTEST` → `HTCAPTION` trick doesn't work because the WebView2 child HWND intercepts mouse events before the parent's WndProc sees the hit-test. Instead, `banner.js` posts `bannerDragStart` on left-mousedown, and the host calls `ReleaseCapture` + `SendMessage(WM_NCLBUTTONDOWN, HTCAPTION)` to kick off Windows' native modal drag loop. Drop position persists through `LocationChanged` (with a suppression flag around programmatic moves like off-screen parking and `ShowBanner`'s snap-to-anchor).
+
+### Settings shape
+New fields on `PulsenetSettings`: `MinimizeMode`, `BannerLocked`, `BannerOpacity`, `BannerScalePct`, `BannerLeft`, `BannerTop`. Tray reset (session 7) already lands the overlay back to 100% zoom; banner `Reset to centre` does the equivalent for the banner independently.
+
+---
+
+## 2026-04-18 — Session 8 — Hover-to-control hotkey forwarder (pinned)
+
+### What's wired
+Global low-level keyboard hook (`WH_KEYBOARD_LL`) installed on overlay show. Allow-list: Space, K (play/pause), M (mute), ←/→ (seek ±5s), ↑/↓ (volume ±5). When intercepted, key is swallowed at OS level and `window.__pulsenetForwardKey(action)` is invoked via `ExecuteScriptAsync`; the renderer drives the YouTube IFrame API directly (`pauseVideo`, `seekTo`, `setVolume`, `mute`, etc.). Auto-repeat suppressed via a `_hoverKeysDown` HashSet so holding a key fires once per press.
+
+### Two gates
+1. `_cursorOverVideo` — JS-pushed via `mouseenter`/`mouseleave` on `#video-wrap` (kept in JS to avoid C#-side DPI/zoom math; an earlier physical-px rect computation broke at 125% DPI).
+2. `_canForwardKeys` — JS-pushed whenever the player mode changes (`onReady`, `teardownPlayer`, `loadLiveStream`). True only when the API player is ready and live-stream mode is off. Without this gate the hook would swallow keys it can't actually forward, which previously broke the original click-then-keys flow.
+
+### Pinned: live-stream limitation
+The `PulseNet LIVE` button uses a raw `<iframe>` pointed at `youtube.com/embed/live_stream?channel=…` (the IFrame API can't pin to a live stream because the `videoId` rotates per restart). With no API surface, `_canForwardKeys` stays false on live mode and the hook falls through, preserving YouTube's native click-then-keys behaviour. Hover-to-control on live streams would need either a `YT.Player` wrapping of the live iframe (with periodic re-resolution of the current `videoId`) or a SendInput-based focus/click simulation. Both are intrusive enough to defer until the first playlist-backed station goes live and the API path can actually be exercised.
+
+---
+
+## 2026-04-18 — Session 7 — Tray reset, min zoom 30%, button rows shifted, top-left click-blocker
+
+### Min zoom raised 20% → 30%
+Below 30% the frame graphics break down visually. Clamp updated in three places: `OverlayWindow.ApplyZoom` (authoritative; also rescues stale `settings.json` values <30), `index.html` `#zoom-input` `min`, and `player.js` `sendZoom` floor.
+
+### Button columns shifted 10px outward
+After the background-graphics widening, both station columns sat too close to the video. Shifted `#stations-left` 47→37, `#stations-right` 956→966; companion home/about buttons updated to keep their column-center alignment (128→118, 1039→1049). Comments updated with new center math.
+
+### Top-left click-blocker (`#click-blocker-tl`)
+New 645×60 transparent absorber added inside `#video-wrap`, anchored at (0,0), z-index 3 — same pattern as the existing bottom blocker. Neutralises YouTube's channel-name / title-link in the upper-left of the player chrome, which was spawning external browser windows that kept streaming after close (tester feedback #4). Width tuned iteratively (150→220→600→630→645) to reach the right edge of the YouTube title text without covering the playback toggle / volume / settings controls on the bottom-right.
+
+---
+
+## 2026-04-18 — Session 7 — Tray "Reset window position"
+
+### Recovery from broken window state
+Beta tester reported resizing the overlay to 20% pushed it off the visible area, with the only recovery path being hand-editing `settings.json`. Added a `ResetWindowRequested` event + "Reset Player Window" menu item to `TrayIcon`. `OverlayWindow.ResetWindow()` reapplies 100% zoom (which also resizes Width/Height to the full frame canvas), recenters on the primary monitor via the existing `CenterOnScreen()` helper, persists the new position + zoom through `SettingsManager`, and ensures the overlay is visible. Wired in `App.xaml.cs` directly to the singleton overlay reference. Menu order is now: Retry update (conditional), Reset Player Window, Exit.
+
+`ApplyZoom` only updates C# state — the renderer's settings-panel `#zoom-input` field is normally synced on `ShowOverlay` via `BuildSyncScript`. A reset triggered while the overlay is already visible left the displayed value stale, so `ResetWindow()` explicitly re-runs `BuildSyncScript` after the zoom change.
+
+---
+
 ## 2026-04-18 — Session 6 — v0.3.1 — Natural video resolution + frame refit
 
 ### Video at natural 16:9, no crop
