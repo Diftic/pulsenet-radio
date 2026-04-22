@@ -1,9 +1,9 @@
 /* ============================================================
    PulseNet Player — Overlay Renderer
-   Frame canvas: 1202 × 646 px  (trimmed 28px each side from 1258)
-   Video rect:   left=193 top=88   width=812 height=457  (true 16:9, centered at y=316.5)
-   Left col:     left=0   top=100  width=193 height=433
-   Right col:    left=1005 top=100 width=197 height=433
+   Frame canvas: 1252 × 670 px  (full frame art; no edge clipping)
+   Video rect:   left=218 top=100  width=812 height=457  (true 16:9, centered at y=328.5)
+   Left col:     left=25  top=112  width=193 height=433
+   Right col:    left=1030 top=112 width=197 height=433
    ============================================================ */
 
 *, *::before, *::after {
@@ -25,8 +25,8 @@ html, body {
 /* ---- Root app container — fixed to frame canvas size ---- */
 #app {
   position: relative;
-  width: 1202px;
-  height: 646px;
+  width: 1252px;
+  height: 670px;
   overflow: hidden;
   flex-shrink: 0;
 }
@@ -37,8 +37,8 @@ html, body {
    without pillarbox bars or cropping. */
 #video-wrap {
   position: absolute;
-  left: 193px;
-  top: 88px;
+  left: 218px;
+  top: 100px;
   width: 812px;
   height: 457px;
   z-index: 1;
@@ -109,14 +109,13 @@ html, body {
 }
 
 /* ---- Layer 2: Frame base ----
-   Sized 20px wider and 10px taller than the 1202×646 canvas so the
-   frame's inner cutout stops clipping the sides and top/bottom of
-   the video. Negative offset keeps the frame centered; overflow on
-   #app clips the small overhang. */
+   Fills the full 1252×670 canvas so the outer frame art (corners,
+   bolts, bezel edges) is never clipped. Video rect and station
+   columns are offset inward (+25, +12) to sit inside the frame. */
 #frame-base {
   position: absolute;
-  left: -25px;
-  top: -12px;
+  left: 0;
+  top: 0;
   width: 1252px;
   height: 670px;
   z-index: 2;
@@ -127,8 +126,8 @@ html, body {
 /* ---- Layer 3: Glow overlay ---- */
 #frame-glow {
   position: absolute;
-  left: -25px;
-  top: -12px;
+  left: 0;
+  top: 0;
   width: 1252px;
   height: 670px;
   z-index: 3;
@@ -145,9 +144,9 @@ html, body {
 /* ---- Layer 4: Station columns ---- */
 .station-col {
   position: absolute;
-  /* top set so mid-gap between btn 5 & 6 lands on video vertical centre (316.5px).
-     btn1 start = 316.5 - 236.5 = 80px */
-  top: 80px;
+  /* top set so mid-gap between btn 5 & 6 lands on video vertical centre (328.5px).
+     btn1 start = 328.5 - 236.5 = 92px */
+  top: 92px;
   z-index: 4;
   display: flex;
   flex-direction: column;
@@ -157,8 +156,8 @@ html, body {
   gap: 17px;
 }
 
-#stations-left  { left: 37px;   width: 193px; top: 129px; } /* shifted down: home btn counts as item 1 */
-#stations-right { left: 966px;  width: 197px; }
+#stations-left  { left: 62px;   width: 193px; top: 141px; } /* shifted down: home btn counts as item 1 */
+#stations-right { left: 991px;  width: 197px; }
 
 /* ---- Station button ---- */
 .station-btn {
@@ -220,8 +219,8 @@ html, body {
 /* ---- Station icon hover preview — covers the full video rect ---- */
 #station-preview {
   position: absolute;
-  left: 193px;
-  top: 88px;
+  left: 218px;
+  top: 100px;
   width: 812px;
   height: 457px;
   z-index: 1;
@@ -265,20 +264,20 @@ html, body {
 /* PulseNet home/live button — top of left column, one gap (17px) above first station btn */
 #pulsenet-home-btn {
   position: absolute;
-  /* Center in left col (left=37, w=193): 37 + (193-32)/2 = 117.5 */
-  left: 118px;
-  /* home counts as item 1; item 1 top = 316.5 - 236.5 = 80px */
-  top: 80px;
+  /* Center in left col (left=62, w=193): 62 + (193-32)/2 = 142.5 */
+  left: 143px;
+  /* home counts as item 1; item 1 top = 328.5 - 236.5 = 92px */
+  top: 92px;
   z-index: 4;
 }
 
 /* About button — bottom of right column, one gap (17px) below last station btn */
 #about-btn {
   position: absolute;
-  /* Center in right col (left=966, w=197): 966 + (197-32)/2 = 1048.5 */
-  left: 1049px;
-  /* btn9 bottom = 80 + 8×49 + 32 = 504px → 504 + 17gap = 521px */
-  top: 521px;
+  /* Center in right col (left=991, w=197): 991 + (197-32)/2 = 1073.5 */
+  left: 1074px;
+  /* btn9 bottom = 92 + 8×49 + 32 = 516px → 516 + 17gap = 533px */
+  top: 533px;
   z-index: 4;
   font-family: 'Consolas', monospace;
   font-size: 8px;
@@ -289,8 +288,8 @@ html, body {
 /* ---- Layer 5: Settings button — below the video, 188×38 framed ---- */
 #settings-btn {
   position: absolute;
-  left: 507px;
-  top: 581px;
+  left: 532px;
+  top: 593px;
   width: 188px;
   height: 38px;
   z-index: 5;
@@ -322,8 +321,8 @@ html, body {
 /* ---- Settings panel — appears above the settings button ---- */
 #settings-panel {
   position: absolute;
-  left: 348px;
-  bottom: 62px; /* bottom of panel = top of #settings-btn + 2px nudge */
+  left: 373px;
+  bottom: 74px; /* bottom of panel = top of #settings-btn + 2px nudge */
   width: 500px;
   z-index: 6;
   pointer-events: auto;
@@ -345,8 +344,8 @@ html, body {
    Replaces the main panel when the user enters the Miniplayer Settings page. */
 #miniplayer-settings-panel {
   position: absolute;
-  left: 348px;
-  bottom: 62px;
+  left: 373px;
+  bottom: 74px;
   width: 500px;
   z-index: 6;
   pointer-events: auto;

@@ -11,9 +11,9 @@ internal static class Constants
     public const string PlayerVirtualHost       = "pulsenet.local";
     public const string PlayerRendererFolder    = "Renderer";
 
-    // Frame canvas dimensions — source image 2515×1292 displayed at 50%.
-    public const int FrameDisplayWidth  = 1202;
-    public const int FrameDisplayHeight = 646;
+    // Frame canvas dimensions — full frame art (outer bezel fully visible, no edge clipping).
+    public const int FrameDisplayWidth  = 1252;
+    public const int FrameDisplayHeight = 670;
 
     // Mini banner — small click-through "now playing" tile in the lower-right.
     public const int BannerWidth  = 400;

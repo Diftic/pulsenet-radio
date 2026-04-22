@@ -3,10 +3,17 @@
 A living journal that persists across compactions. Captures decisions, progress, and context.
 
 ## Current State
-- **Focus:** v0.3.1 released. Video now renders at natural 16:9 (no crop), frame resized to 1252×670 to match, click-blocker bumped to 60px. README/DEVLOG/TODO refreshed. Build & Release workflow triggered by `v0.3.1` tag.
-- **Blocked:** Real playlist IDs for 18 stations not yet provided. `frame_glow.png` asset not yet created. GitHub Pages not yet enabled for sales page.
+- **Focus:** v0.4.1 released — frame-edge clipping fixed (`#app` 1202×646 → 1252×670, frame at (0,0), all other elements shifted +25x/+12y, WPF constants bumped). DEVLOG/TODO updated, tagged `v0.4.1`, pushed. Build & Release workflow producing the release.
+- **Blocked:** Real playlist IDs for 18 stations not yet provided. `frame_glow.png` asset not yet created.
 
 ## Log
+
+### 2026-04-22 22:00 — Completed: Outer frame edge-clipping fix
+- Session 6 (v0.3.1) had stretched the frame PNG (1252×670) at offset (-25, -12) so its inner cutout matched the widened video, with `overflow: hidden` on a 1202×646 `#app` clipping the overhang. The overhang turned out to contain visible bezel detail — corners/bolts/edges were being chopped on all 4 sides.
+- Fix (option 1 — code-only, user chose this to preserve build integrity):
+  - `src/Renderer/style.css`: `#app` 1202×646 → 1252×670. `#frame-base`/`#frame-glow` offsets `(-25,-12)` → `(0,0)`. All other absolute-positioned elements shifted `+25x, +12y`: `#video-wrap`, `#station-preview` (193,88)→(218,100); `.station-col` top 80→92; `#stations-left` (37,129)→(62,141); `#stations-right` left 966→991; `#pulsenet-home-btn` (118,80)→(143,92); `#about-btn` (1049,521)→(1074,533); `#settings-btn` (507,581)→(532,593); both settings panels left 348→373, bottom 62→74.
+  - `src/Constants.cs`: `FrameDisplayWidth/Height` 1202/646 → 1252/670 so WPF window + WebView viewport grow to match (feeds `App.xaml.cs` off-screen parking and `OverlayWindow.ApplyZoom`).
+- Testing gotcha: `dotnet run --no-build` hit the Mutex because a stale v0.3.1 binary from Apr 18 was running from `bin/x64/Debug/net9.0-windows/PulseNet-Player.exe` (no `win-x64/` subpath) — that's why the splash was showing "v0.4.0 available". Killed PID and rebuilt with `dotnet build -a x64`; fresh bits land in `bin/x64/Debug/net9.0-windows/win-x64/`. Launched that exe directly; user confirmed fix looks good.
 
 ### 2026-04-18 — Completed: v0.3.1 video + frame refit
 - Removed `transform: scale(1.055)` from YouTube iframe → video plays uncropped

@@ -4,6 +4,24 @@
 
 ---
 
+## 2026-04-22 — Session 10 — v0.4.1 — Full outer frame bezel no longer clipped
+
+### The bug
+Session 6 (v0.3.1) had resized the frame PNG to 1252×670 and placed it at offset `(-25, -12)` inside a 1202×646 `#app` container with `overflow: hidden`, accepting the overhang clip as a visual tradeoff. Turned out the overhang wasn't empty bezel — it contained the frame's rounded corners, outer bolts, and glow tips. All four outer edges were being shaved 25px horizontally and 12px vertically, visible in tester screenshots.
+
+### The fix (option 1 — code-only, asset untouched)
+Grew the canvas to match the art instead of trimming the art to match the canvas:
+- `src/Renderer/style.css`: `#app` 1202×646 → 1252×670. `#frame-base` and `#frame-glow` offsets `(-25,-12)` → `(0,0)` — no more overhang, no more clipping. Every other absolutely-positioned element shifted `+25x, +12y` to sit at the same spot relative to the frame: `#video-wrap` and `#station-preview` `(193,88)` → `(218,100)`; `.station-col` base top `80` → `92`; `#stations-left` `(37,129)` → `(62,141)`; `#stations-right` left `966` → `991`; `#pulsenet-home-btn` `(118,80)` → `(143,92)`; `#about-btn` `(1049,521)` → `(1074,533)`; `#settings-btn` `(507,581)` → `(532,593)` (still centred — 626 = 1252/2); both settings panels left `348` → `373`, bottom `62` → `74`.
+- `src/Constants.cs`: `FrameDisplayWidth/Height` `1202/646` → `1252/670` so the WPF window and WebView2 viewport grow to match. Consumed by `App.xaml.cs` (off-screen banner-parking offset) and `OverlayWindow.ApplyZoom` (window resize + `WebView.ZoomFactor` scaling) — no other call sites, so the bump propagates automatically. Saved window positions in `settings.json` remain valid (position is x/y, not size).
+
+### Dev-loop gotcha
+`<Platform>x64</Platform>` in the csproj makes `dotnet build` write to `bin/x64/Debug/net9.0-windows/` by default, but an older v0.3.1 artefact from Apr 18 was still living at that path and auto-starting at login. `dotnet run --no-build` hit the mutex (`Constants.MutexId`) and silently exited, so the on-screen window kept being the stale v0.3.1 build (which is why its splash correctly reported "v0.4.0 available"). Resolution: `taskkill` the zombie, `dotnet build -a x64` (lands in the RID-qualified `bin/x64/Debug/net9.0-windows/win-x64/` subdir), launch that exe directly. Not a code issue — worth noting for the next time someone wonders why changes don't take.
+
+### Release
+Tagged `v0.4.1`, pushed. Build & Release workflow publishes `PulseNet-Player.exe` + `PulseNet-Setup.msi` to the GitHub release page; clients at v0.4.0 will see the banner on next launch.
+
+---
+
 ## 2026-04-18 — Session 9 — v0.4.0 — Mini banner + Miniplayer Settings
 
 ### Minimise to banner

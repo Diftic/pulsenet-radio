@@ -27,6 +27,7 @@
 - [x] Mouse hook only active while overlay is visible — no global scroll impact when hidden
 - [x] Rebrand from "PulseNet Radio" to "PulseNet Player" (binary, repo, UI, docs, lore)
 - [x] v0.3.1 — video renders at natural 16:9 (812×457), no crop; frame resized to 1252×670 to fit; click-blocker bumped to 60px
+- [x] v0.4.1 — outer frame bezel no longer clipped; `#app` grown 1202×646 → 1252×670, frame offset zeroed, all other elements shifted +25x/+12y, WPF constants bumped to match
 
 ## Stations
 
