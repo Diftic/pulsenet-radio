@@ -465,6 +465,40 @@
     });
   }
 
+  // Version is pushed in by C# (BuildSyncScript sets window.__pulsenetVersion).
+  // The button label always reads the current global so a re-sync after a
+  // successful in-place update would surface the new number without restart.
+  var versionBtn = document.getElementById('version-btn');
+  function versionLabel() {
+    var v = window.__pulsenetVersion || '0.0.0';
+    return 'v' + v + ' — Check for updates';
+  }
+  window.__pulsenetRefreshVersionLabel = function () {
+    if (versionBtn && !versionBtn.disabled) versionBtn.textContent = versionLabel();
+  };
+  if (versionBtn) {
+    versionBtn.textContent = versionLabel();
+    versionBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      if (versionBtn.disabled) return;
+      versionBtn.disabled = true;
+      versionBtn.textContent = 'Checking for updates…';
+      try {
+        window.chrome.webview.postMessage(JSON.stringify({ type: 'checkForUpdates' }));
+      } catch (_) {
+        versionBtn.disabled = false;
+        versionBtn.textContent = versionLabel();
+      }
+    });
+  }
+  // Called by C# once CheckAsync has finished and any modal has been
+  // dismissed, so the button returns to its idle state.
+  window.__pulsenetUpdateCheckDone = function () {
+    if (!versionBtn) return;
+    versionBtn.disabled = false;
+    versionBtn.textContent = versionLabel();
+  };
+
   if (lockBtn) {
     lockBtn.addEventListener('click', function () {
       dragLocked = !dragLocked;

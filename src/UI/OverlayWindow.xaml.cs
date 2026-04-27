@@ -488,6 +488,9 @@ public partial class OverlayWindow : Window
                     _settings.Save(_settings.Current with { StreamerModeEnabled = streamerEnabled });
                     break;
 
+                case "checkForUpdates":
+                    _ = HandleCheckForUpdatesAsync();
+                    break;
             }
         }
         catch (Exception ex)
@@ -525,6 +528,7 @@ public partial class OverlayWindow : Window
         var bannerLockText = s.BannerLocked
             ? "\\uD83D\\uDD12 Banner locked"
             : "\\uD83D\\uDD13 Banner unlocked";
+        var versionLiteral = System.Text.Json.JsonSerializer.Serialize(GetAppVersionLabel());
         return $"(function(){{" +
                $"var os=document.getElementById('opacity-slider');" +
                $"var ov=document.getElementById('opacity-val');" +
@@ -547,11 +551,77 @@ public partial class OverlayWindow : Window
                $"if(blb){{blb.textContent='{bannerLockText}';blb.classList.toggle('locked',{(s.BannerLocked ? "true" : "false")});}}" +
                $"var smt=document.getElementById('streamer-mode-toggle');" +
                $"if(smt)smt.checked={(s.StreamerModeEnabled ? "true" : "false")};" +
+               $"window.__pulsenetVersion={versionLiteral};" +
+               $"if(typeof window.__pulsenetRefreshVersionLabel==='function')window.__pulsenetRefreshVersionLabel();" +
                // Reset to main settings page when overlay re-opens.
                $"if(sp)sp.classList.add('hidden');" +
                $"if(mp)mp.classList.add('hidden');" +
                $"if(stp)stp.classList.add('hidden');" +
                $"}})();";
+    }
+
+    private static string GetAppVersionLabel()
+    {
+        var v = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        return v is null ? "0.0.0" : $"{v.Major}.{v.Minor}.{v.Build}";
+    }
+
+    // User-initiated update check from the settings-panel version banner.
+    // CheckAsync runs off the UI thread; the prompt and any side-effects
+    // (Application.Shutdown for the in-place update) must marshal back.
+    private async Task HandleCheckForUpdatesAsync()
+    {
+        UpdateInfo info;
+        try
+        {
+            info = await UpdateChecker.CheckAsync(_logger);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Manual update check threw");
+            info = new UpdateInfo(false, string.Empty, string.Empty, string.Empty);
+        }
+
+        await Dispatcher.InvokeAsync(() =>
+        {
+            try
+            {
+                var current = GetAppVersionLabel();
+                if (info.HasUpdate)
+                {
+                    var result = MessageBox.Show(
+                        this,
+                        $"A new version is available.\n\nCurrent: v{current}\nLatest: v{info.Version}\n\nUpdate and restart now?",
+                        "PulseNet Player — Update available",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Information);
+                    if (result == MessageBoxResult.Yes)
+                    {
+                        _ = SelfUpdateService.ApplyAsync(
+                            info,
+                            () => Dispatcher.Invoke(() => Application.Current.Shutdown()),
+                            _logger);
+                    }
+                }
+                else
+                {
+                    MessageBox.Show(
+                        this,
+                        $"PulseNet Player is up to date (v{current}).",
+                        "PulseNet Player",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information);
+                }
+            }
+            finally
+            {
+                if (_webViewReady)
+                {
+                    _ = WebView.CoreWebView2.ExecuteScriptAsync(
+                        "if(typeof window.__pulsenetUpdateCheckDone==='function')window.__pulsenetUpdateCheckDone();");
+                }
+            }
+        });
     }
 
     // -------------------------------------------------------------------------
@@ -893,6 +963,13 @@ public partial class OverlayWindow : Window
             WebView.CoreWebView2.NavigationCompleted += OnNavigationCompleted;
             WebView.CoreWebView2.NewWindowRequested  += OnNewWindowRequested;
             WebView.CoreWebView2.WebMessageReceived  += OnWebMessageReceived;
+
+            // Define window.__pulsenetVersion before any page script runs, so the
+            // first render of the version label sees the real number instead of
+            // the "0.0.0" placeholder. BuildSyncScript still re-injects on every
+            // overlay show so a future in-place update is picked up without restart.
+            await WebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(
+                $"window.__pulsenetVersion={System.Text.Json.JsonSerializer.Serialize(GetAppVersionLabel())};");
 
             // Map the virtual hostname to the local Renderer folder so the player
             // page is served over https (required for YouTube IFrame API to work).

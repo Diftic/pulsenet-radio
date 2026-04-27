@@ -139,24 +139,6 @@ html, body {
   user-select: none;
 }
 
-/* ---- Layer 3: Glow overlay ---- */
-#frame-glow {
-  position: absolute;
-  left: 0;
-  top: 0;
-  width: 1252px;
-  height: 670px;
-  z-index: 3;
-  pointer-events: none;
-  user-select: none;
-  animation: glow-pulse 4s ease-in-out infinite;
-}
-
-@keyframes glow-pulse {
-  0%, 100% { opacity: 0.6; }
-  50%       { opacity: 1.0; }
-}
-
 /* ---- Layer 4: Station columns ---- */
 .station-col {
   position: absolute;

@@ -31,12 +31,12 @@
 - [x] v1.4.1 — OBS streaming via Window Capture (WGC). Cleared `WS_EX_TOOLWINDOW` from overlay so OBS lists it; F9 now parks off-screen instead of collapsing visibility so DWM keeps rendering for capture; new `AudioBridge` (WASAPI process-loopback) re-emits WebView2 audio from `PulseNet-Player.exe` so OBS Capture Audio (BETA) sees us as the audio source. New `#click-blocker-br` over YouTube fullscreen icon, `.station-col` made `pointer-events:none` to free the leftmost/rightmost ~30px of the video. "Streamer Options" panel replaced with "Streamer Info" instructions panel.
 - [x] v1.4.2 — AudioCategory_Media via `IAudioClient2.SetClientProperties` so SteelSeries Sonar / Voicemeeter / Wavelink classify our session into the MEDIA channel (clean DSP) instead of GAME (degraded). AudioSessionRenamer permanently removed — diagnostic confirmed it wasn't the cause of Sonar's grouping behaviour and with AudioBridge present it would just create duplicate "PulseNet Player" entries in Volume Mixer. Streamer Info panel got the OBS Monitor Off step + the Sonar AUX-mute guidance.
 - [x] v1.5.0 — `StreamerModeEnabled` setting (default off) gates AudioBridge so non-streamers don't get the doubled-audio regression v1.4.x shipped. UI toggle at top of Streamer Info panel; setting persists; pump polls every iteration so toggling reacts within ~200-500ms. Plus two sub-panel UX fixes — Streamer Info now closes on click-outside (was only watching the main settings panel) and the Settings Menu button now folds Streamer Info before opening (was stacking behind).
+- [x] v1.6.0 — Manual "Check for updates" button + version banner in main settings panel. New `case "checkForUpdates"` web-message handler on `OverlayWindow` calls `UpdateChecker.CheckAsync`, prompts via MessageBox, and reuses `SelfUpdateService.ApplyAsync` for the in-place restart path. `window.__pulsenetVersion` now defined via `AddScriptToExecuteOnDocumentCreatedAsync` so the button shows the real version on first render (was falling back to "0.0.0"). Removed dead `frame_glow.png` references from `index.html`, `style.css`, and TODO.
 
 ## Stations
 
 - [ ] Wire real playlist IDs for all 18 stations — set `live: true` and replace placeholder `playlistId` per station as they go live
 - [x] Confirm station icons are final and correctly matched to stations
-- [ ] Add `frame_glow.png` asset for glow animation layer
 
 ## Player features
 
@@ -81,7 +81,6 @@
 
 
 
-- `frame_glow.png` referenced in HTML but file not yet created — `onerror` hides it gracefully
 - YouTube share/logo buttons can't be removed (cross-origin iframe + ToS), but `#click-blocker` (60px transparent div over the bottom of the video rect) absorbs the clicks so they can't be interacted with
 - YouTube IFrame API does not fire a title-change event — `getVideoData().title` is polled every 2s while playing
 - WebView2 user data shared across all virtual-host pages — auth persists across restarts

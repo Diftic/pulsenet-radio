@@ -27,10 +27,6 @@
     <!-- Layer 2: Sci-fi frame (no glow, structural) -->
     <img id="frame-base" src="assets/frame_base.png" draggable="false" alt="">
 
-    <!-- Layer 3: Glow overlay (animated) — hidden via CSS if asset missing -->
-    <img id="frame-glow" src="assets/frame_glow.png" draggable="false" alt=""
-         onerror="this.style.display='none'">
-
     <!-- Layer 4: Station selector buttons -->
     <div id="stations-left"  class="station-col"></div>
     <div id="stations-right" class="station-col"></div>
@@ -54,6 +50,9 @@
         <button id="discord-btn" class="settings-action-btn" title="Join us on Discord">
           <img src="assets/discord_logo.png" alt="Discord" draggable="false">
         </button>
+      </div>
+      <div class="settings-row">
+        <button id="version-btn" class="settings-action-btn" title="Check for updates">Check for updates</button>
       </div>
       <div class="settings-row">
         <button id="lock-btn" class="settings-action-btn">&#x1F513; Unlocked</button>

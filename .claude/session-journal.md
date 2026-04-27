@@ -3,10 +3,19 @@
 A living journal that persists across compactions. Captures decisions, progress, and context.
 
 ## Current State
-- **Focus:** v1.5.0 shipped — Streamer Mode toggle gates AudioBridge so non-streamers don't hit the v1.4.x doubled-audio regression. Plus two Streamer Info panel UX fixes. v1.4.x → v1.5.0 closes the OBS streaming feature for both audiences (streamers + listeners).
-- **Blocked:** Real playlist IDs for 18 stations not yet provided. `frame_glow.png` asset not yet created.
+- **Focus:** v1.6.0 shipped — manual "Check for updates" button + live version banner in main settings panel. Reuses existing `UpdateChecker` + `SelfUpdateService` so the manual path matches the auto-check path. `window.__pulsenetVersion` injected on document creation so the label is correct on first render.
+- **Blocked:** Real playlist IDs for 18 stations not yet provided.
 
 ## Log
+
+### 2026-04-28 — Completed: v1.6.0 — manual update check + version banner
+- **Gap.** Auto-update-check on startup existed since v1.4.x, but no in-app way to retrigger between launches and no in-app surface for the current version number. PyCharm crashed mid-session; recovered the work-in-progress diff (5 files modified) and finished it.
+- **Fix.** New `version-btn` row at the top of main settings panel. JS posts `{type:'checkForUpdates'}`; new `case "checkForUpdates"` in `OverlayWindow.OnWebMessageReceived` fires `HandleCheckForUpdatesAsync` which calls `UpdateChecker.CheckAsync` off-thread, marshals back via `Dispatcher.InvokeAsync` for a Yes/No `MessageBox`, and on Yes reuses `SelfUpdateService.ApplyAsync` (same path the auto-check uses). C# calls `window.__pulsenetUpdateCheckDone()` after the modal closes to re-enable the button.
+- **Version-injection timing fix.** First implementation injected `window.__pulsenetVersion` only via `BuildSyncScript` on `ShowOverlay`, so `player.js`'s initial `versionLabel()` call hit `undefined` and rendered "v0.0.0 — Check for updates" until the first overlay open. Moved injection to `WebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync` during `InitializeWebViewAsync` — runs before any page script. `BuildSyncScript` still re-injects on every overlay show so a future in-place self-update would surface the new version without restart.
+- **Cleanup.** Removed dead `frame_glow.png` references from `index.html`, `style.css` (rule + `glow-pulse` keyframes), and TODO. Asset was aspirational, never produced.
+- **Files touched.** `src/UI/OverlayWindow.xaml.cs` (case + handler + injection), `src/Renderer/player.js` (button wiring + version refresh hook), `src/Renderer/index.html` (button row, removed glow img), `src/Renderer/style.css` (removed glow rule), `src/pulsenet.csproj` (1.5.0 → 1.6.0), `TODO.md`, `DEVLOG.md`.
+- **Verified.** Clean build (0 warnings, 0 errors). Player launches, WebView2 ready, on-startup auto-check logged "current: 1.6.0, latest: 1.5.0" as expected (latest is still 1.5.0 until the v1.6.0 release publishes via the workflow).
+- Tagged `v1.6.0`, pushed. Build & Release workflow producing the release.
 
 ### 2026-04-27 21:10 — Completed: v1.5.0 — Streamer Mode toggle + sub-panel UX fixes
 - **The bug we shipped in v1.4.2.** v1.4.2 declared the OBS streaming feature complete after testing on a Sonar-equipped streaming setup. What we missed: AudioBridge ran unconditionally on every launch, so the ~90% of users who are *just listening* to music — and don't have an app router — heard doubled audio from both paths hitting their default device with no available fix on their end. Tester surfaced this as soon as we had the discussion about the broader user base. Genuine regression vs pre-AudioBridge.

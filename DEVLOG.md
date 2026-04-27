@@ -4,6 +4,30 @@
 
 ---
 
+## 2026-04-28 — Session 14 — v1.6.0 — Manual update check + version banner
+
+### What was missing
+We had `UpdateChecker` and `SelfUpdateService` running an automatic check on startup since v1.4.x — but the only way to *retrigger* a check between launches was to restart the app. If a user dismissed the update prompt and changed their mind, or if a release shipped while the app was running, they had no in-app path to re-check. They also had no in-app surface for the **current** version number — that lived only in the assembly metadata.
+
+### The fix — version banner with click-to-recheck
+New row at the top of the main settings panel: `v1.6.0 — Check for updates`. Click triggers `UpdateChecker.CheckAsync` on the C# side. If a new release is available, a Yes/No `MessageBox` offers to apply it via `SelfUpdateService.ApplyAsync` (same code path the auto-check on startup uses). If up to date, an info box confirms.
+
+JS↔C# wire-up:
+- `player.js` posts `{type:'checkForUpdates'}` and disables the button + shows "Checking for updates…" until it hears back.
+- `OverlayWindow.OnWebMessageReceived` adds a `case "checkForUpdates"` that fires `HandleCheckForUpdatesAsync` (off-thread `CheckAsync`, `Dispatcher.InvokeAsync` for the modal + restart marshalling).
+- C# calls `window.__pulsenetUpdateCheckDone()` after the modal closes to re-enable the button.
+
+### Version injection — first-render correctness
+The button label reads from `window.__pulsenetVersion`. First implementation injected this only via `BuildSyncScript` on `ShowOverlay`, which meant `player.js`'s initial render saw `undefined` and fell back to "0.0.0". Fix: `WebView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync` is now called once during `InitializeWebViewAsync` to define `window.__pulsenetVersion` *before* any page script runs. `BuildSyncScript` still re-injects on every overlay show so a future in-place self-update would surface the new version without restart (the executable's assembly version has changed by then).
+
+### Cleanup — frame_glow removed
+`frame_glow.png` was an aspirational asset referenced in `index.html` and `style.css` since the early frame layering pass. Never produced; the `<img onerror>` fallback hid it gracefully but the dead reference, the CSS rule, and the `glow-pulse` keyframes were just clutter. Removed all three plus the matching TODO entries.
+
+### Release
+Tagged `v1.6.0`, pushed. Build & Release workflow publishes; v1.5.0 clients see the update banner on next launch (auto-check) or via the new manual button.
+
+---
+
 ## 2026-04-27 — Session 13 — v1.5.0 — Streamer Mode toggle (default off)
 
 ### The bug we shipped in v1.4.2
