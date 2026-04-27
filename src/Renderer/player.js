@@ -435,14 +435,18 @@
   if (settingsBtn) {
     settingsBtn.addEventListener('click', function (e) {
       e.stopPropagation();
-      // If the miniplayer sub-panel is open, fold it away first so we never end up
-      // with both panels visible. Also exits banner edit mode.
+      // Fold any open sub-panel before toggling the main settings panel so we
+      // never end up with both visible / one stacked behind the other.
       var miniplayerPanelEl = document.getElementById('miniplayer-settings-panel');
       if (miniplayerPanelEl && !miniplayerPanelEl.classList.contains('hidden')) {
         miniplayerPanelEl.classList.add('hidden');
         try {
           window.chrome.webview.postMessage(JSON.stringify({ type: 'bannerEditMode', value: false }));
         } catch (_) {}
+      }
+      var streamerPanelEl = document.getElementById('streamer-settings-panel');
+      if (streamerPanelEl && !streamerPanelEl.classList.contains('hidden')) {
+        streamerPanelEl.classList.add('hidden');
       }
       settingsPanel.classList.toggle('hidden');
     });
@@ -689,11 +693,13 @@
   }
 
   // ---- Streamer Info sub-panel ----
-  // Static instructional content (OBS setup walkthrough). The button just
-  // toggles the panel into view — no live state to wire.
-  var streamerBtn     = document.getElementById('streamer-settings-btn');
-  var streamerPanel   = document.getElementById('streamer-settings-panel');
-  var streamerBackBtn = document.getElementById('streamer-back-btn');
+  // Static OBS-setup walkthrough plus a Streamer Mode toggle that gates the
+  // AudioBridge service (default off — non-streamers don't want the duplicate
+  // audio path).
+  var streamerBtn        = document.getElementById('streamer-settings-btn');
+  var streamerPanel      = document.getElementById('streamer-settings-panel');
+  var streamerBackBtn    = document.getElementById('streamer-back-btn');
+  var streamerModeToggle = document.getElementById('streamer-mode-toggle');
 
   function showStreamerPanel() {
     if (settingsPanel) settingsPanel.classList.add('hidden');
@@ -719,11 +725,27 @@
     });
   }
 
+  if (streamerModeToggle) {
+    streamerModeToggle.addEventListener('change', function () {
+      try {
+        window.chrome.webview.postMessage(JSON.stringify({
+          type: 'streamerMode',
+          enabled: !!streamerModeToggle.checked,
+        }));
+      } catch (_) {}
+    });
+  }
+
   // Close panel on click outside
   document.addEventListener('click', function (e) {
     if (settingsPanel && !settingsPanel.classList.contains('hidden')) {
       if (!settingsPanel.contains(e.target) && e.target !== settingsBtn) {
         settingsPanel.classList.add('hidden');
+      }
+    }
+    if (streamerPanel && !streamerPanel.classList.contains('hidden')) {
+      if (!streamerPanel.contains(e.target) && e.target !== settingsBtn) {
+        streamerPanel.classList.add('hidden');
       }
     }
   });

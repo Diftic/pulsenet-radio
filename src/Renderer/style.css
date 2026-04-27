@@ -406,6 +406,34 @@ html, body {
   display: none;
 }
 
+/* Streamer Mode toggle row — sits above the OBS instructions */
+.streamer-mode-row {
+  padding: 12px;
+  background: rgba(34, 211, 238, 0.06);
+  border: 1px solid rgba(34, 211, 238, 0.22);
+  border-radius: 8px;
+}
+
+.streamer-mode-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #cfeefa;
+  line-height: 1.5;
+}
+
+.streamer-mode-label input[type="checkbox"] {
+  margin-top: 3px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.streamer-mode-label strong {
+  color: #22d3ee;
+}
+
 /* Streamer Info panel — instructional content layout */
 .streamer-info-content {
   display: flex;

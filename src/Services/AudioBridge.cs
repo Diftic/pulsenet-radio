@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PInvoke;
+using Settings;
 using static PInvoke.AudioBridgeInterop;
 using static PInvoke.AudioSessionInterop;
 
@@ -26,12 +27,14 @@ using static PInvoke.AudioSessionInterop;
 internal sealed class AudioBridge : IHostedService, IDisposable
 {
     private readonly ILogger<AudioBridge> _logger;
+    private readonly SettingsManager _settings;
     private readonly uint _ownPid;
     private CancellationTokenSource? _cts;
     private Thread? _pumpThread;
 
-    public AudioBridge(ILogger<AudioBridge> logger)
+    public AudioBridge(SettingsManager settings, ILogger<AudioBridge> logger)
     {
+        _settings = settings;
         _logger = logger;
         _ownPid = (uint)Environment.ProcessId;
     }
@@ -65,6 +68,16 @@ internal sealed class AudioBridge : IHostedService, IDisposable
         {
             while (!token.IsCancellationRequested)
             {
+                // Streamer Mode gate. Default off so non-streaming users don't
+                // hear doubled audio (WebView2 direct + AudioBridge re-emit).
+                // Streamers enable it from the Streamer Info panel; disabling
+                // breaks RunOnce out via the same setting check in its loop.
+                if (!_settings.Current.StreamerModeEnabled)
+                {
+                    Thread.Sleep(500);
+                    continue;
+                }
+
                 if (!TryFindWebView2RootPid(out var webView2Pid))
                 {
                     Thread.Sleep(500);
@@ -214,7 +227,9 @@ internal sealed class AudioBridge : IHostedService, IDisposable
             _logger.LogInformation("AudioBridge running");
 
             // 7. Pump loop: block on capture event, drain capture, copy into render.
-            while (!token.IsCancellationRequested)
+            //    Also re-checks StreamerModeEnabled each iteration so toggling
+            //    the setting off mid-playback tears the bridge down within ~200ms.
+            while (!token.IsCancellationRequested && _settings.Current.StreamerModeEnabled)
             {
                 var waitResult = WaitForSingleObject(captureEvent, 200);
                 if (waitResult == WAIT_TIMEOUT) continue;

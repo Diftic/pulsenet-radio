@@ -4,6 +4,41 @@
 
 ---
 
+## 2026-04-27 — Session 13 — v1.5.0 — Streamer Mode toggle (default off)
+
+### The bug we shipped in v1.4.2
+v1.4.2 declared the AudioBridge release "complete". The day's testing was on a streaming setup with SteelSeries Sonar; the workflow there was solid. What we missed: **AudioBridge was running unconditionally for everyone**, not just streamers. For the ~90% of users who are *just listening to music* and don't have an app router like Sonar, both audio paths (WebView2 direct + AudioBridge re-emit) hit their default device simultaneously. That's a permanent doubled-audio regression with no available fix on their end — they have no AUX channel to mute.
+
+### The fix — make the bridge opt-in
+New `StreamerModeEnabled` setting on `PulsenetSettings`, default **false**. AudioBridge's pump checks the setting in both its outer scheduling loop *and* its inner sample-pump loop, so:
+- Toggle off (default): bridge sleeps; no second audio session created; non-streamers hear single-path audio just like pre-AudioBridge.
+- Toggle on: bridge spins up within ~500ms (outer loop wakes from its sleep); WebView2 PID lookup, capture+render activation, sample pump all proceed as in v1.4.2.
+- Toggle off mid-stream: inner pump loop notices on its next iteration (~200ms tail) and `RunOnce` returns; bridge tears its WASAPI clients down cleanly; back to single-path.
+
+`SettingsManager.SettingsChanged` already fires synchronously on `Save`, but the pump doesn't subscribe — instead it polls the setting on each loop iteration. The thread is sleeping on either a 500ms `Thread.Sleep` (idle path) or a 200ms `WaitForSingleObject` on the capture event (active path), so the polling cost is zero and the reaction time is bounded by those waits. Cleaner than wiring a `ManualResetEvent` plus all the threading care that needs.
+
+### UI — toggle inside Streamer Info, not in main settings
+Added a checkbox row at the top of the Streamer Info sub-panel:
+> **Enable streamer mode** &mdash; creates an audio bridge OBS can capture. Leave off if you're just listening to music.
+
+Two reasons for putting it there rather than the main settings panel:
+- **Discoverability inversion.** The 90% who don't stream never need to find this toggle. Hiding it inside Streamer Info means it doesn't clutter their settings.
+- **Streamers always go to Streamer Info anyway** to read the OBS setup walkthrough. The toggle is the natural first step in that flow — it lives at the top of the panel, before the OBS setup steps.
+
+The checkbox's state syncs from settings on every overlay show via `BuildSyncScript`, so it correctly reflects the persisted value across launches and across panel close/reopen.
+
+### Sub-panel UX fixes (v1.4.2 missed these too)
+Tester noticed two related glitches with Streamer Info:
+1. Clicking outside the panel didn't close it (the main settings panel's click-outside handler was watching only `#settings-panel`, not `#streamer-settings-panel`).
+2. Clicking the **Settings Menu** button while Streamer Info was open opened the main settings panel *behind* it, leaving both visible at once.
+
+Fix: extended the main settings button handler to also fold `#streamer-settings-panel` (it already folds `#miniplayer-settings-panel` for the same reason), and extended the document-level click-outside handler to also close `#streamer-settings-panel` when the click lands outside it.
+
+### Release
+Tagged `v1.5.0`, pushed. Build & Release workflow publishes; v1.4.2 clients see the update banner on next launch and get a clean single-path listening experience by default.
+
+---
+
 ## 2026-04-27 — Session 12 — v1.4.2 — AudioCategory, Streamer Info polish, AudioSessionRenamer rip
 
 ### What v1.4.1 missed

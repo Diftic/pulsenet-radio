@@ -3,10 +3,18 @@
 A living journal that persists across compactions. Captures decisions, progress, and context.
 
 ## Current State
-- **Focus:** v1.4.2 shipped — Sonar UX nailed via `AudioCategory_Media`, `AudioSessionRenamer` ripped, Streamer Info panel finalised with OBS Monitor Off + Sonar AUX-mute guidance. v1.4.1 + v1.4.2 together comprise the full OBS streaming feature.
+- **Focus:** v1.5.0 shipped — Streamer Mode toggle gates AudioBridge so non-streamers don't hit the v1.4.x doubled-audio regression. Plus two Streamer Info panel UX fixes. v1.4.x → v1.5.0 closes the OBS streaming feature for both audiences (streamers + listeners).
 - **Blocked:** Real playlist IDs for 18 stations not yet provided. `frame_glow.png` asset not yet created.
 
 ## Log
+
+### 2026-04-27 21:10 — Completed: v1.5.0 — Streamer Mode toggle + sub-panel UX fixes
+- **The bug we shipped in v1.4.2.** v1.4.2 declared the OBS streaming feature complete after testing on a Sonar-equipped streaming setup. What we missed: AudioBridge ran unconditionally on every launch, so the ~90% of users who are *just listening* to music — and don't have an app router — heard doubled audio from both paths hitting their default device with no available fix on their end. Tester surfaced this as soon as we had the discussion about the broader user base. Genuine regression vs pre-AudioBridge.
+- **The fix.** New `StreamerModeEnabled` field on `PulsenetSettings`, default `false`. `AudioBridge.RunPump` checks `_settings.Current.StreamerModeEnabled` in its outer scheduling loop *and* in `RunOnce`'s inner sample-pump loop. When false: pump sleeps, no audio sessions created, non-streamers hear single-path audio. When toggled true: pump wakes within ~500ms, WebView2 PID lookup + WASAPI activate proceed as before. When toggled false mid-playback: inner loop notices within ~200ms (next capture-event wait timeout), `RunOnce` returns cleanly, WASAPI clients dispose, back to single-path. No `ManualResetEvent` plumbing needed — the pump's natural sleep cadence covers reaction time.
+- **UI.** Checkbox row at the top of the Streamer Info sub-panel (deliberately not in the main settings panel — listeners shouldn't see it; streamers will see it as the natural first step before the OBS setup walkthrough). New web-message case `streamerMode` in `OverlayWindow.OnWebMessageReceived` persists the setting; `BuildSyncScript` reads current value and ticks the checkbox on every overlay show.
+- **Sub-panel UX fixes (v1.4.2 missed these).** Two related issues with Streamer Info: (a) clicking outside the panel didn't close it because the document-level click-outside handler in `player.js` was watching only `#settings-panel`; (b) clicking the Settings Menu button while Streamer Info was open opened the main panel *behind* Streamer Info because the button handler folded only `#miniplayer-settings-panel` before toggling. Fix: extended the click-outside handler to also close `#streamer-settings-panel`, and extended the settings-button handler to also fold it before toggling. The miniplayer panel had already been getting both treatments correctly; we just hadn't replicated them when Streamer Info was added.
+- Locally verified: streamer mode off → no second `PULSENET-PL` entry in Sonar, no doubling. Streamer mode on → bridge spins up, OBS captures, AUX-mute workflow works. Toggle off mid-playback → bridge tears down within ~200ms. Click-outside and settings-button transitions both work cleanly.
+- Tagged `v1.5.0`, pushed. Build & Release workflow producing the release.
 
 ### 2026-04-27 20:20 — Completed: v1.4.2 — Sonar workflow + AudioSessionRenamer rip
 - v1.4.1's AudioBridge worked for the broadcast but Sonar's per-session UI surfaced two new problems on the streamer's machine:

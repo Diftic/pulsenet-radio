@@ -22,4 +22,12 @@ public record PulsenetSettings
     public int BannerScalePct               { get; set; } = 100;
     public double? BannerLeft               { get; set; } = null;
     public double? BannerTop                { get; set; } = null;
+
+    /// <summary>
+    /// When true, AudioBridge captures WebView2 audio and re-emits it from
+    /// PulseNet-Player.exe so OBS Window Capture's Capture Audio (BETA) can
+    /// pick it up. Default off — non-streaming users hear doubled audio
+    /// otherwise (one path direct from WebView2, one from the bridge re-emit).
+    /// </summary>
+    public bool StreamerModeEnabled         { get; set; } = false;
 }
