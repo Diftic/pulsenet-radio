@@ -1,0 +1,154 @@
+/* ============================================================
+   PulseNet Player — OBS Browser Source variant
+   Mirrors the in-app overlay geometry: 1252×670 canvas with the
+   YouTube embed at (218,100) sized 812×457 behind the frame artwork.
+   Streamers scale the source freely via OBS source transforms.
+   ============================================================ */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Fixed-pixel canvas — scaled to fit the OBS Browser Source viewport via JS
+   in player.js. transform: scale() preserves the 1252×670 internal layout
+   so child elements keep their pixel positions; the source size in OBS just
+   determines the visual scale, with letterbox/pillarbox transparent space
+   on whichever axis doesn't match. */
+#app {
+  position: relative;
+  width: 1252px;
+  height: 670px;
+  overflow: hidden;
+  flex-shrink: 0;
+  transform-origin: center center;
+}
+
+#video-wrap {
+  position: absolute;
+  left: 218px;
+  top: 100px;
+  width: 812px;
+  height: 457px;
+  z-index: 1;
+  background: #000;
+  overflow: hidden;
+}
+
+#player {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  border: none;
+  display: block;
+}
+
+#frame-base {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1252px;
+  height: 670px;
+  z-index: 2;
+  pointer-events: none;
+  user-select: none;
+}
+
+#frame-glow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1252px;
+  height: 670px;
+  z-index: 3;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ---- Station buttons — visual only in the OBS variant ----
+   Geometry must match Renderer/style.css exactly so the buttons land in
+   the same frame slots as the in-app player. pointer-events: none is set
+   on every interactive element so OBS can't accidentally route clicks. */
+.station-col {
+  position: absolute;
+  top: 92px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 5px;
+  gap: 17px;
+  pointer-events: none;
+}
+
+#stations-left  { left: 62px;  width: 193px; top: 141px; }
+#stations-right { left: 991px; width: 197px; }
+
+.station-btn {
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  pointer-events: none;
+  transform: scale(1.23);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  background: rgba(0, 15, 35, 0.45);
+  border: 1px solid rgba(34, 211, 238, 0.12);
+  border-radius: 4px;
+}
+
+.station-btn img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  pointer-events: none;
+  -webkit-user-drag: none;
+}
+
+.station-placeholder {
+  font-size: 18px;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.station-num {
+  font-family: 'Consolas', monospace;
+  font-size: 9px;
+  color: rgba(34, 211, 238, 0.55);
+  letter-spacing: 0.05em;
+}
+
+#pulsenet-home-btn {
+  position: absolute;
+  left: 143px;
+  top: 92px;
+  z-index: 4;
+}
+
+#about-btn {
+  position: absolute;
+  left: 1074px;
+  top: 533px;
+  z-index: 4;
+  font-family: 'Consolas', monospace;
+  font-size: 8px;
+  color: rgba(34, 211, 238, 0.55);
+  letter-spacing: 0.05em;
+}

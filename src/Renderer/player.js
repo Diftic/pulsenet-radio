@@ -118,6 +118,18 @@
     } catch (_) {}
   }
 
+  // Coalesces duplicate posts so we don't spam C# with identical state events.
+  // Live mode has no API surface, so we drive this from explicit teardown / live-load
+  // calls rather than YouTube events.
+  var lastReportedPlaying = null;
+  function postPlayerState(playing) {
+    if (playing === lastReportedPlaying) return;
+    lastReportedPlaying = playing;
+    try {
+      window.chrome.webview.postMessage(JSON.stringify({ type: 'playerState', playing: playing }));
+    } catch (_) {}
+  }
+
   function activateStation(station, btn) {
     if (activeBtn) activeBtn.classList.remove('active');
     activeBtn = btn;
@@ -166,6 +178,9 @@
     player = null;
     playerReady = false;
     postKeyForwardCapable();
+    // Tear-down means OBS should stop showing whatever was loaded; the next
+    // create call will flip this back to true once content is actually present.
+    postPlayerState(false);
 
     // YT.Player replaces #player (a <div>) with an <iframe> of the same id.
     // Restore a clean <div id="player"> so the next creation has something
@@ -235,16 +250,41 @@
     postKeyForwardCapable();
 
     var div = document.getElementById('player');
-    if (!div) return;
+    if (!div || !div.parentNode) return;
+
+    // enablejsapi=1 lets YT.Player attach to the iframe and surface
+    // onStateChange events for native YouTube pause/play. Without it the OBS
+    // Browser Source has no way to know the streamer paused. We replace the
+    // existing #player element with an iframe carrying the same id so YT.Player
+    // can target it directly.
     var iframe = document.createElement('iframe');
+    iframe.id = 'player';
     iframe.src = 'https://www.youtube.com/embed/live_stream?channel='
-      + encodeURIComponent(chId) + '&autoplay=1';
+      + encodeURIComponent(chId) + '&autoplay=1&enablejsapi=1';
     iframe.setAttribute('frameborder', '0');
     iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
     iframe.setAttribute('allowfullscreen', '');
-    iframe.style.width  = '100%';
-    iframe.style.height = '100%';
-    div.appendChild(iframe);
+    iframe.style.position = 'absolute';
+    iframe.style.inset    = '0';
+    iframe.style.width    = '100%';
+    iframe.style.height   = '100%';
+    iframe.style.border   = 'none';
+    iframe.style.display  = 'block';
+    div.parentNode.replaceChild(iframe, div);
+
+    player = new YT.Player('player', {
+      events: {
+        onReady: function () {
+          playerReady = true;
+          postKeyForwardCapable();
+        },
+        onStateChange: onPlayerStateChange,
+        onError:       onPlayerError,
+      },
+    });
+
+    // Optimistic — YT will correct via onStateChange once playback actually starts.
+    postPlayerState(true);
   }
 
   // ---- Key-forward capability push ----
@@ -330,6 +370,12 @@
     if (event.data === YT.PlayerState.ENDED && !activeBtn) {
       showIdleLogo();
     }
+    // Mirror playback state to C# so the OBS Browser Source page can hide its
+    // iframe when the user pauses. BUFFERING is treated as playing so the OBS
+    // visual doesn't blink during normal mid-stream rebuffers.
+    var st = event.data;
+    var playing = (st === YT.PlayerState.PLAYING || st === YT.PlayerState.BUFFERING);
+    postPlayerState(playing);
   }
 
   function onPlayerError(event) {
@@ -665,6 +711,126 @@
       } catch (_) {}
     });
   }
+
+  // ---- Streamer Options sub-panel ----
+  // Exposes the localhost Browser Source URLs streamers paste into OBS.
+  // Port input is debounced behind an explicit Apply so a stray keypress
+  // doesn't cycle the listener mid-typing.
+  var streamerBtn        = document.getElementById('streamer-settings-btn');
+  var streamerPanel      = document.getElementById('streamer-settings-panel');
+  var streamerBackBtn    = document.getElementById('streamer-back-btn');
+  var streamerPortInput  = document.getElementById('streamer-port-input');
+  var streamerPortApply  = document.getElementById('streamer-port-apply-btn');
+  var streamerPlayerUrl  = document.getElementById('streamer-player-url');
+  var streamerPlayerCopy = document.getElementById('streamer-player-copy-btn');
+  var streamerStatus     = document.getElementById('streamer-status');
+
+  function refreshStreamerUrls(port) {
+    var p = parseInt(port, 10);
+    if (isNaN(p) || p < 1024 || p > 65535) p = 17328;
+    var base = 'http://127.0.0.1:' + p;
+    if (streamerPlayerUrl) streamerPlayerUrl.value = base + '/player';
+  }
+
+  function setStreamerStatus(text, kind) {
+    if (!streamerStatus) return;
+    streamerStatus.textContent = text;
+    streamerStatus.classList.remove('error', 'success');
+    if (kind) streamerStatus.classList.add(kind);
+  }
+
+  function showStreamerPanel() {
+    if (settingsPanel) settingsPanel.classList.add('hidden');
+    if (streamerPanel) streamerPanel.classList.remove('hidden');
+  }
+
+  function hideStreamerPanel() {
+    if (streamerPanel) streamerPanel.classList.add('hidden');
+    if (settingsPanel) settingsPanel.classList.remove('hidden');
+  }
+
+  if (streamerBtn) {
+    streamerBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      showStreamerPanel();
+    });
+  }
+
+  if (streamerBackBtn) {
+    streamerBackBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      hideStreamerPanel();
+    });
+  }
+
+  if (streamerPortApply) {
+    streamerPortApply.addEventListener('click', function () {
+      var p = parseInt(streamerPortInput.value, 10);
+      if (isNaN(p) || p < 1024 || p > 65535) {
+        setStreamerStatus('Port must be between 1024 and 65535.', 'error');
+        return;
+      }
+      refreshStreamerUrls(p);
+      setStreamerStatus('Applying port ' + p + '…');
+      try {
+        window.chrome.webview.postMessage(JSON.stringify({ type: 'browserSourcePort', value: p }));
+      } catch (_) {}
+    });
+  }
+
+  // Apply on Enter inside the port field, for keyboard-only flow.
+  if (streamerPortInput) {
+    streamerPortInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && streamerPortApply) streamerPortApply.click();
+    });
+  }
+
+  function copyToClipboard(text, okMsg) {
+    function fallback() {
+      // Older OBS-bundled CEF builds don't always have async clipboard. The
+      // textarea+execCommand path is awkward but works everywhere we care about.
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); setStreamerStatus(okMsg, 'success'); }
+      catch (_) { setStreamerStatus('Copy failed — select and copy manually.', 'error'); }
+      finally { document.body.removeChild(ta); }
+    }
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function () { setStreamerStatus(okMsg, 'success'); },
+          fallback
+        );
+      } else { fallback(); }
+    } catch (_) { fallback(); }
+  }
+
+  if (streamerPlayerCopy && streamerPlayerUrl) {
+    streamerPlayerCopy.addEventListener('click', function () {
+      copyToClipboard(streamerPlayerUrl.value, 'Player URL copied.');
+    });
+  }
+
+  // C# pushes { type: 'browserSourcePort', port: N, status: 'listening' | 'failed' }
+  // when the listener (re)binds, so the panel reflects the actual bound port.
+  window.__pulsenetSetStreamerState = function (port, status) {
+    if (streamerPortInput && port) streamerPortInput.value = port;
+    refreshStreamerUrls(port);
+    if (status === 'listening') {
+      setStreamerStatus('Listening on port ' + port + '. Add as a Browser Source in OBS.', 'success');
+    } else if (status === 'failed') {
+      setStreamerStatus('Port ' + port + ' is in use. Pick a different port.', 'error');
+    }
+  };
+
+  // Initial population — server-side state arrives via postWebMessageAsJson
+  // shortly after WebView2 is ready (BuildSyncScript injects the port). Until
+  // then, render the saved-default port so the URL fields aren't blank.
+  refreshStreamerUrls(streamerPortInput ? streamerPortInput.value : 17328);
 
   // Close panel on click outside
   document.addEventListener('click', function (e) {

@@ -22,4 +22,15 @@ internal static class Constants
 
     // Default YouTube channel for @Mr_Xul (test/development channel).
     public const string DefaultChannelId = "UCDemStdcwUHbqhD2ePbKH6A";
+
+    // PulseNet Broadcasting main channel. Used as the live-stream fallback when
+    // the user has cleared YoutubeChannelId in settings — mirrors the in-app
+    // player's PULSENET_LIVE_CHANNEL constant in Renderer/player.js.
+    public const string PulsenetBroadcastChannelId = "UCIMaIJsfJEMi5yJIe5nAb0g";
+
+    // OBS Browser Source server — localhost-only HTTP listener that exposes
+    // /banner and /player as URLs streamers can drop into OBS as a Browser Source.
+    public const int BrowserSourceDefaultPort = 17328;
+    public const string BrowserSourceLoopback = "127.0.0.1";
+    public const string BrowserSourceObsFolder = "obs"; // subfolder under Renderer/
 }

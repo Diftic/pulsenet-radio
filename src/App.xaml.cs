@@ -17,6 +17,7 @@ public partial class App : Application
     private MiniBannerWindow? _banner;
     private GlobalHotkeyListener? _listener;
     private AudioSessionRenamer? _audioRenamer;
+    private NowPlayingState? _nowPlaying;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -30,13 +31,16 @@ public partial class App : Application
 
         var settings = _host.Services.GetRequiredService<SettingsManager>();
         _listener    = _host.Services.GetRequiredService<GlobalHotkeyListener>();
-        var listener = _listener;
+        _nowPlaying  = _host.Services.GetRequiredService<NowPlayingState>();
+        var browserSourceServer = _host.Services.GetRequiredService<BrowserSourceServer>();
+        var listener     = _listener;
+        var nowPlaying   = _nowPlaying;
         var overlayLogger = _host.Services.GetRequiredService<ILogger<OverlayWindow>>();
 
         // OverlayWindow must be created on the STA (UI) thread.
         // Pre-size to the fixed frame canvas. Position off-screen so the WebView2
         // HwndHost initialises invisibly, then snap to centre on first show.
-        _overlay = new OverlayWindow(settings, listener, overlayLogger);
+        _overlay = new OverlayWindow(settings, listener, browserSourceServer, nowPlaying, overlayLogger);
         var overlay = _overlay;
         overlay.Width  = Constants.FrameDisplayWidth;
         overlay.Height = Constants.FrameDisplayHeight;
@@ -123,8 +127,16 @@ public partial class App : Application
         });
 
         overlay.BalloonTipRequested += (title, msg) => _trayIcon.ShowBalloon(title, msg);
-        overlay.NowPlayingChanged   += t => Dispatcher.Invoke(() => banner.SetTitle(t));
-        overlay.StationChanged      += s => Dispatcher.Invoke(() => banner.SetStation(s));
+
+        // NowPlayingState is the single source of truth — both the in-app mini
+        // banner and the BrowserSourceServer's SSE stream subscribe to it.
+        overlay.NowPlayingChanged += t => nowPlaying.SetTitle(t);
+        overlay.StationChanged    += s => nowPlaying.SetStation(s);
+        nowPlaying.Changed += snapshot => Dispatcher.Invoke(() =>
+        {
+            banner.SetTitle(snapshot.Title);
+            banner.SetStation(snapshot.Station);
+        });
 
         // Miniplayer Settings sub-panel → banner control
         overlay.BannerEditModeChanged += on => Dispatcher.Invoke(() => banner.SetEditMode(on));
@@ -169,11 +181,14 @@ public partial class App : Application
             .AddConsole()
             .SetMinimumLevel(LogLevel.Debug));
         services.AddSingleton<SettingsManager>();
+        services.AddSingleton<NowPlayingState>();
 
         // Singletons exposed for direct resolution; also registered as hosted services so
         // the Generic Host starts and stops them automatically.
         services.AddSingleton<GlobalHotkeyListener>();
         services.AddHostedService(p => p.GetRequiredService<GlobalHotkeyListener>());
 
+        services.AddSingleton<BrowserSourceServer>();
+        services.AddHostedService(p => p.GetRequiredService<BrowserSourceServer>());
     }
 }

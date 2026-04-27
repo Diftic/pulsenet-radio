@@ -73,11 +73,27 @@ html, body {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 60px;
+  height: 62px;
   z-index: 3;
   background: transparent;
   cursor: default;
 }
+
+/* Bottom-right barrier — sits above the wider bottom blocker and covers
+   the fullscreen-expand icon YouTube overlays at the bottom-right of
+   embedded videos. Adjust width/height/offset once placement is verified
+   via the debug colours below. */
+#click-blocker-br {
+  position: absolute;
+  right: 0;
+  bottom: 83px;
+  width: 80px;
+  height: 50px;
+  z-index: 3;
+  background: transparent;
+  cursor: default;
+}
+
 
 /* ---- Top-left click-blocker — 645×60 over YouTube's channel/title link ---- */
 #click-blocker-tl {
@@ -154,6 +170,11 @@ html, body {
   justify-content: flex-start;
   padding: 0 5px;
   gap: 17px;
+  /* Columns extend ~37/39px into the video rect on each side; without this
+     the transparent column container swallows clicks in those strips,
+     making the leftmost/rightmost ~30px of the video inert. The station
+     buttons inside set pointer-events: auto so they remain clickable. */
+  pointer-events: none;
 }
 
 #stations-left  { left: 62px;   width: 193px; top: 141px; } /* shifted down: home btn counts as item 1 */
@@ -361,6 +382,115 @@ html, body {
 
 #miniplayer-settings-panel.hidden {
   display: none;
+}
+
+/* Streamer Options sub-panel — same anchor/dimensions as #settings-panel. */
+#streamer-settings-panel {
+  position: absolute;
+  left: 373px;
+  bottom: 74px;
+  width: 500px;
+  z-index: 6;
+  pointer-events: auto;
+  background: rgba(0, 10, 25, 0.90);
+  border: 1px solid rgba(34, 211, 238, 0.30);
+  border-radius: 12px;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  user-select: none;
+}
+
+#streamer-settings-panel.hidden {
+  display: none;
+}
+
+.streamer-url-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(2, 12, 24, 0.80);
+  border: 1px solid rgba(34, 211, 238, 0.30);
+  border-radius: 4px;
+  color: #cfeefa;
+  font-family: 'Consolas', monospace;
+  font-size: 14px;
+  padding: 6px 8px;
+  outline: none;
+}
+
+.streamer-url-input:focus {
+  border-color: rgba(34, 211, 238, 0.60);
+}
+
+.streamer-status {
+  flex: 1;
+  font-size: 13px;
+  color: rgba(207, 238, 250, 0.65);
+  letter-spacing: 0.02em;
+}
+
+.streamer-status.error {
+  color: #ff8888;
+}
+
+.streamer-status.success {
+  color: #88ffaa;
+}
+
+.streamer-copy-btn {
+  flex: 1;
+  width: 100%;
+  text-align: center;
+}
+
+/* Streamer Info panel — instructional content layout */
+.streamer-info-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.streamer-info-heading {
+  font-family: 'Consolas', monospace;
+  font-size: 16px;
+  color: #22d3ee;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.streamer-info-steps {
+  margin: 0;
+  padding-left: 22px;
+  color: #cfeefa;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.streamer-info-steps li {
+  margin-bottom: 4px;
+}
+
+.streamer-info-steps strong {
+  color: #22d3ee;
+  font-weight: 600;
+}
+
+.streamer-info-steps em {
+  color: rgba(207, 238, 250, 0.92);
+  font-style: italic;
+}
+
+.streamer-info-tip {
+  font-size: 13px;
+  color: rgba(207, 238, 250, 0.70);
+  border-top: 1px solid rgba(34, 211, 238, 0.20);
+  padding-top: 12px;
+  line-height: 1.5;
+}
+
+.streamer-info-tip strong {
+  color: #22d3ee;
 }
 
 .settings-row {

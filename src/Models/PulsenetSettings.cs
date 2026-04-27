@@ -22,4 +22,5 @@ public record PulsenetSettings
     public int BannerScalePct               { get; set; } = 100;
     public double? BannerLeft               { get; set; } = null;
     public double? BannerTop                { get; set; } = null;
+    public int BrowserSourcePort            { get; set; } = pulsenet.Constants.BrowserSourceDefaultPort;
 }

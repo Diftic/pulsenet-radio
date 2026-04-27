@@ -18,6 +18,10 @@
       <!-- Top-left barrier (645×60) — swallows clicks on YouTube's channel
            avatar / title link in the upper-left of the player chrome. -->
       <div id="click-blocker-tl" aria-hidden="true"></div>
+      <!-- Bottom-right barrier — covers the fullscreen-expand icon YouTube
+           overlays at the bottom-right of embedded videos, just above the
+           wider bottom click-blocker. -->
+      <div id="click-blocker-br" aria-hidden="true"></div>
     </div>
 
     <!-- Layer 2: Sci-fi frame (no glow, structural) -->
@@ -56,6 +60,9 @@
       </div>
       <div class="settings-row">
         <button id="miniplayer-settings-btn" class="settings-action-btn">Miniplayer Settings</button>
+      </div>
+      <div class="settings-row">
+        <button id="streamer-settings-btn" class="settings-action-btn">Streamer Info</button>
       </div>
       <div class="settings-row">
         <span class="settings-label">Opacity</span>
@@ -102,6 +109,26 @@
       </div>
       <div class="settings-row">
         <button id="banner-reset-btn" class="settings-action-btn">Reset to centre</button>
+      </div>
+    </div>
+
+    <!-- Layer 5c: Streamer Info sub-panel — instructions for adding the player
+         to streaming software via window capture. -->
+    <div id="streamer-settings-panel" class="hidden">
+      <div class="settings-row">
+        <button id="streamer-back-btn" class="settings-action-btn">&#x2190; Back</button>
+      </div>
+      <div class="streamer-info-content">
+        <p class="streamer-info-heading">Stream PulseNet with OBS Studio</p>
+        <ol class="streamer-info-steps">
+          <li>In OBS, add a <strong>Window Capture</strong> source.</li>
+          <li>Set <strong>Window</strong> to <em>PulseNet Player</em>.</li>
+          <li>Set <strong>Capture Method</strong> to <em>Windows 10 (1903 and up)</em>.</li>
+          <li>Tick <strong>Capture Audio (BETA)</strong> to bring the player's audio into the broadcast.</li>
+          <li>Untick <strong>Capture Cursor</strong> to keep your mouse out of the broadcast.</li>
+          <li>Tick <strong>Client Area</strong>.</li>
+        </ol>
+        <p class="streamer-info-tip">Press <strong>F9</strong> to hide the player from your monitor &mdash; viewers still see it in your stream.</p>
       </div>
     </div>
 

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PulseNet Player — OBS</title>
+  <link rel="stylesheet" href="player.css">
+  <script>window.PULSENET_CHANNEL = "{{CHANNEL_ID}}";</script>
+</head>
+<body>
+  <div id="app">
+    <div id="video-wrap">
+      <iframe id="player"
+              src=""
+              frameborder="0"
+              allow="autoplay; encrypted-media; picture-in-picture"
+              allowfullscreen></iframe>
+    </div>
+
+    <img id="frame-base" src="/assets/frame_base.png" draggable="false" alt="">
+    <img id="frame-glow" src="/assets/frame_glow.png" draggable="false" alt=""
+         onerror="this.style.display='none'">
+
+    <!-- Station selector buttons — visual only in the OBS variant. -->
+    <div id="stations-left"  class="station-col"></div>
+    <div id="stations-right" class="station-col"></div>
+
+    <button id="pulsenet-home-btn" class="station-btn">
+      <img src="/assets/pulsenet_icon.png" alt="PulseNet" draggable="false">
+    </button>
+    <button id="about-btn" class="station-btn">Info</button>
+  </div>
+  <script src="/stations.js"></script>
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="player.js"></script>
+</body>
+</html>
