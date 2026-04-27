@@ -29,6 +29,7 @@
 - [x] v0.3.1 — video renders at natural 16:9 (812×457), no crop; frame resized to 1252×670 to fit; click-blocker bumped to 60px
 - [x] v0.4.1 — outer frame bezel no longer clipped; `#app` grown 1202×646 → 1252×670, frame offset zeroed, all other elements shifted +25x/+12y, WPF constants bumped to match
 - [x] v1.4.1 — OBS streaming via Window Capture (WGC). Cleared `WS_EX_TOOLWINDOW` from overlay so OBS lists it; F9 now parks off-screen instead of collapsing visibility so DWM keeps rendering for capture; new `AudioBridge` (WASAPI process-loopback) re-emits WebView2 audio from `PulseNet-Player.exe` so OBS Capture Audio (BETA) sees us as the audio source. New `#click-blocker-br` over YouTube fullscreen icon, `.station-col` made `pointer-events:none` to free the leftmost/rightmost ~30px of the video. "Streamer Options" panel replaced with "Streamer Info" instructions panel.
+- [x] v1.4.2 — AudioCategory_Media via `IAudioClient2.SetClientProperties` so SteelSeries Sonar / Voicemeeter / Wavelink classify our session into the MEDIA channel (clean DSP) instead of GAME (degraded). AudioSessionRenamer permanently removed — diagnostic confirmed it wasn't the cause of Sonar's grouping behaviour and with AudioBridge present it would just create duplicate "PulseNet Player" entries in Volume Mixer. Streamer Info panel got the OBS Monitor Off step + the Sonar AUX-mute guidance.
 
 ## Stations
 

@@ -132,13 +132,36 @@ internal sealed class AudioBridge : IHostedService, IDisposable
                 "AudioBridge mix format: tag=0x{Tag:X4} channels={Ch} rate={Rate} bits={Bits} blockAlign={BA}",
                 wfx.wFormatTag, wfx.nChannels, wfx.nSamplesPerSec, wfx.wBitsPerSample, wfx.nBlockAlign);
 
-            // 2. Initialize render client (event-driven, shared mode, ~20ms buffer).
+            // 2. Declare audio category BEFORE Initialize so Sonar/Wavelink/etc.
+            //    classify our session as media playback (MEDIA channel) rather
+            //    than guessing GAME and then locking the controls because the
+            //    classification couldn't be applied retroactively. Same QI
+            //    object as IAudioClient — IAudioClient2 inherits it.
+            if (renderObj is IAudioClient2 renderClient2)
+            {
+                var props = new AudioClientProperties
+                {
+                    cbSize     = (uint)Marshal.SizeOf<AudioClientProperties>(),
+                    bIsOffload = false,
+                    eCategory  = AudioStreamCategory.Media,
+                    Options    = AudioStreamOptions.None,
+                };
+                var hrProps = renderClient2.SetClientProperties(ref props);
+                if (hrProps != 0)
+                    _logger.LogDebug("SetClientProperties returned 0x{Hr:X8}", hrProps);
+            }
+
+            // 3. Initialize render client (event-driven, shared mode). Passing
+            //    bufferDuration = 0 in shared+event mode makes Windows pick the
+            //    audio engine's minimum period (typically ~10ms vs 20ms+ if we
+            //    requested explicitly). Half the latency = closer to in-phase
+            //    with WebView2's direct path = inaudible doubling instead of
+            //    audible echo on the streamer's headphones.
             renderEvent = CreateEventW(IntPtr.Zero, false, false, IntPtr.Zero);
-            const long bufferDurationHns = REFTIMES_PER_SEC / 50;
             var hr = renderClient.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
                 AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
-                bufferDurationHns,
+                0,
                 0,
                 mixFormat,
                 IntPtr.Zero);
@@ -163,7 +186,7 @@ internal sealed class AudioBridge : IHostedService, IDisposable
             hr = captureClient.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,
                 AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
-                bufferDurationHns,
+                0,
                 0,
                 mixFormat,
                 IntPtr.Zero);

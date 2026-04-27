@@ -47,6 +47,37 @@ internal static class AudioBridgeInterop
         ExcludeTargetProcessTree = 1,
     }
 
+    /// <summary>
+    /// Audio stream category — declared via IAudioClient2.SetClientProperties so
+    /// app-aware routers (SteelSeries Sonar, Wavelink, Voicemeeter) classify the
+    /// stream into the right channel. Without this, Sonar guesses Game by default
+    /// and refuses to let the user re-route the session ("didn't allow Sonar to
+    /// change the audio settings").
+    /// </summary>
+    public enum AudioStreamCategory
+    {
+        Other                  = 0,
+        ForegroundOnlyMedia    = 1,
+        BackgroundCapableMedia = 2,
+        Communications         = 3,
+        Alerts                 = 4,
+        SoundEffects           = 5,
+        GameEffects            = 6,
+        GameMedia              = 7,
+        GameChat               = 8,
+        Speech                 = 9,
+        Movie                  = 10,
+        Media                  = 11,
+    }
+
+    public enum AudioStreamOptions : uint
+    {
+        None        = 0,
+        Raw         = 0x1,
+        MatchFormat = 0x2,
+        Ambisonics  = 0x4,
+    }
+
     // --- Structs ------------------------------------------------------------
 
     [StructLayout(LayoutKind.Sequential)]
@@ -98,6 +129,15 @@ internal static class AudioBridgeInterop
         public ushort cbSize;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct AudioClientProperties
+    {
+        public uint cbSize;
+        [MarshalAs(UnmanagedType.Bool)] public bool bIsOffload;
+        public AudioStreamCategory eCategory;
+        public AudioStreamOptions Options;
+    }
+
     // --- COM interfaces -----------------------------------------------------
 
     [ComImport]
@@ -139,6 +179,42 @@ internal static class AudioBridgeInterop
         [PreserveSig] int Reset();
         [PreserveSig] int SetEventHandle(IntPtr eventHandle);
         [PreserveSig] int GetService(ref Guid riid, [MarshalAs(UnmanagedType.IUnknown)] out object ppv);
+    }
+
+    /// <summary>
+    /// Extends IAudioClient with SetClientProperties so we can declare the
+    /// stream's AudioCategory before Initialize. Inheritance order in COM
+    /// vtable matters — every IAudioClient method is repeated first, then the
+    /// IAudioClient2 additions.
+    /// </summary>
+    [ComImport]
+    [Guid("726778CD-F60A-4EDA-82DE-E47610CD78AA")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    public interface IAudioClient2
+    {
+        // --- IAudioClient (vtable order) ---
+        [PreserveSig] int Initialize(
+            uint shareMode,
+            uint streamFlags,
+            long hnsBufferDuration,
+            long hnsPeriodicity,
+            IntPtr pFormat,
+            IntPtr audioSessionGuid);
+        [PreserveSig] int GetBufferSize(out uint numBufferFrames);
+        [PreserveSig] int GetStreamLatency(out long phnsLatency);
+        [PreserveSig] int GetCurrentPadding(out uint numPaddingFrames);
+        [PreserveSig] int IsFormatSupported(uint shareMode, IntPtr pFormat, out IntPtr ppClosestMatch);
+        [PreserveSig] int GetMixFormat(out IntPtr ppDeviceFormat);
+        [PreserveSig] int GetDevicePeriod(out long phnsDefaultDevicePeriod, out long phnsMinimumDevicePeriod);
+        [PreserveSig] int Start();
+        [PreserveSig] int Stop();
+        [PreserveSig] int Reset();
+        [PreserveSig] int SetEventHandle(IntPtr eventHandle);
+        [PreserveSig] int GetService(ref Guid riid, [MarshalAs(UnmanagedType.IUnknown)] out object ppv);
+        // --- IAudioClient2 additions ---
+        [PreserveSig] int IsOffloadCapable(AudioStreamCategory category, [MarshalAs(UnmanagedType.Bool)] out bool pbOffloadCapable);
+        [PreserveSig] int SetClientProperties(ref AudioClientProperties pProperties);
+        [PreserveSig] int GetBufferSizeLimits(IntPtr pFormat, [MarshalAs(UnmanagedType.Bool)] bool bEventDriven, out long phnsMinBufferDuration, out long phnsMaxBufferDuration);
     }
 
     [ComImport]

@@ -3,10 +3,20 @@
 A living journal that persists across compactions. Captures decisions, progress, and context.
 
 ## Current State
-- **Focus:** OBS streaming complete — Window Capture (WGC) + WASAPI process-loopback audio bridge proven working end-to-end. Streamer Info panel guides setup. Browser Source server still in tree but unused; planned for removal in a follow-up cleanup pass.
+- **Focus:** v1.4.2 shipped — Sonar UX nailed via `AudioCategory_Media`, `AudioSessionRenamer` ripped, Streamer Info panel finalised with OBS Monitor Off + Sonar AUX-mute guidance. v1.4.1 + v1.4.2 together comprise the full OBS streaming feature.
 - **Blocked:** Real playlist IDs for 18 stations not yet provided. `frame_glow.png` asset not yet created.
 
 ## Log
+
+### 2026-04-27 20:20 — Completed: v1.4.2 — Sonar workflow + AudioSessionRenamer rip
+- v1.4.1's AudioBridge worked for the broadcast but Sonar's per-session UI surfaced two new problems on the streamer's machine:
+  1. Sonar parked our session in GAME channel (which applies game-oriented DSP that mangles music — "FAR lesser audio quality") and locked the controls because the classification couldn't be retroactively applied — `PulseNet Player didn't allow Sonar to change the audio settings`.
+  2. WebView2's direct path was on a separate Sonar channel, so the streamer heard both paths simultaneously → echo on headphones.
+- **Fix 1 — declare AudioCategory_Media before Initialize.** Added `IAudioClient2`, `AudioStreamCategory`, `AudioStreamOptions`, `AudioClientProperties` to `src/PInvoke/AudioBridgeInterop.cs`; in `AudioBridge.RunOnce` we QI the activated IAudioClient to IAudioClient2 and `SetClientProperties` with `eCategory = Media` *before* the `Initialize` call. Sonar now routes us to MEDIA channel with clean DSP. Tester confirmed: lock disappeared, audio quality matched WebView2 direct.
+- **Fix 2 — workflow, not architecture.** Streamer mutes Sonar's AUX channel (where WebView2's direct path lives) — only MEDIA reaches their headphones, no echo, no quality degradation. Sonar's per-channel mute is local; it doesn't reach OBS's WASAPI process loopback, so the broadcast continues unaffected. Verified: muting any Sonar channel does not affect OBS Audio Mixer levels for our Window Capture source. Streamer Info panel got both this conditional step and the earlier OBS Monitor Off step.
+- **AudioSessionRenamer killed.** Diagnostic (renamer disabled in App.xaml.cs) confirmed Sonar groups WebView2 helpers via process tree, not via display name or icon. Renamer was innocent of the binding; with AudioBridge present it's actively harmful in Volume Mixer (two same-named "PulseNet Player" entries side by side). `src/Services/AudioSessionRenamer.cs` deleted, `src/PInvoke/AudioSessionInterop.cs` trimmed from ~190 → ~95 lines (kept only MMDevice + toolhelp32 bits AudioBridge still uses), `_audioRenamer` field + Dispose call removed from `App.xaml.cs`.
+- **Buffer durations dropped to 0** on capture+render Initialize calls (auto = engine period, ~10 ms each side). Tester confirmed this didn't perceptibly change the echo, which validates that the dominant cause was duplicate playback paths through Sonar, not latency. Kept the change anyway — slightly tighter sync is free.
+- Tagged `v1.4.2`, pushed. Build & Release workflow producing the release.
 
 ### 2026-04-27 17:50 — Completed: AudioBridge (WASAPI process-loopback re-emit)
 - Problem: OBS Window Capture's "Capture Audio (BETA)" binds to the captured window's process. PulseNet's window is `PulseNet-Player.exe` but its audio is generated entirely by `msedgewebview2.exe` helper PIDs (descendants), so OBS captured silence. Application Audio Capture didn't help either — `msedgewebview2.exe` doesn't appear in its picker on this machine.

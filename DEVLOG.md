@@ -4,6 +4,42 @@
 
 ---
 
+## 2026-04-27 — Session 12 — v1.4.2 — AudioCategory, Streamer Info polish, AudioSessionRenamer rip
+
+### What v1.4.1 missed
+Session 11 shipped `AudioBridge` correctly emitting captured WebView2 audio from `PulseNet-Player.exe` so OBS Window Capture's Capture Audio (BETA) picks it up. Tester verified broadcast worked. What we discovered when running the bridge alongside SteelSeries Sonar:
+
+1. **Sonar dumped our session into the GAME channel** because `IAudioClient` defaults to `AudioCategory_Other` and Sonar's heuristic for unclassified streams is GAME. The GAME channel applies game-oriented DSP (positional/spatial processing tuned for footsteps) which audibly mangles music — tester reported "FAR lesser audio quality".
+2. **The session controls were locked** with the warning `PulseNet Player didn't allow Sonar to change the audio settings` — Sonar's UI grays the slider when classification can't be retroactively applied.
+3. **Echo on the streamer's headphones**, because Sonar routes both WebView2's direct path and AudioBridge's re-emit to the listening output simultaneously with ~20–40 ms latency offset.
+
+### Fix — declare the audio category explicitly
+`IAudioClient2.SetClientProperties` with `eCategory = AudioStreamCategory.Media`, called *before* `Initialize`. Sonar then routes our session into the MEDIA channel with clean DSP, and the controls unlock.
+
+Implementation:
+- New types in `src/PInvoke/AudioBridgeInterop.cs`: `AudioStreamCategory` enum (mirrors Windows' eleven values, with `Media = 11` being the relevant one), `AudioStreamOptions` enum, `AudioClientProperties` struct, and `IAudioClient2` COM interface declared with the full IAudioClient vtable inheritance order followed by the three IAudioClient2 additions.
+- `AudioBridge.RunOnce` now QIs the activated render IAudioClient to `IAudioClient2` and sets properties before `Initialize`. Capture client is left as plain IAudioClient — process-loopback capture doesn't need a category and `InitializeSharedAudioStream` doesn't accept the LOOPBACK flag anyway.
+- Buffer durations dropped to `0` (auto = engine period, ~10ms) on both capture and render init for slightly tighter sync — though latency was a red herring; the dominant audible echo cause was the duplicate playback paths, not the time offset.
+
+### The Sonar workflow
+With AudioCategory in place, the architecture sorts cleanly into two visible Sonar entries:
+- **MEDIA**: AudioBridge re-emit (clean processing — the audio we want streamer + viewers to hear)
+- **AUX**: WebView2's helper sessions (Sonar can't classify them, defaults to AUX with degrading DSP)
+
+Streamer mutes AUX in Sonar → only MEDIA reaches their headphones → no echo, clean quality. Sonar mutes are local-only — they don't reach OBS's WASAPI process loopback, so the broadcast continues unaffected. Streamer Info panel now documents this conditional step for users on Sonar/Voicemeeter/Wavelink.
+
+### AudioSessionRenamer permanently removed
+The pre-AudioBridge service that renamed `msedgewebview2.exe` audio sessions to "PulseNet Player" in Volume Mixer. Diagnostic test confirmed it was *not* the cause of Sonar grouping the WebView2 sessions with each other (Sonar groups by process tree, not by display name or icon). With AudioBridge providing a real `PulseNet-Player.exe` audio session, the renamer is now actively *harmful* in Volume Mixer — would create two same-named "PulseNet Player" entries side-by-side. Killed: `src/Services/AudioSessionRenamer.cs` deleted; trimmed `src/PInvoke/AudioSessionInterop.cs` from ~190 lines to ~95 lines (kept only the MMDevice + toolhelp32 interop AudioBridge needs); dropped the field + Dispose call from `App.xaml.cs`.
+
+### Streamer Info refinements
+- Added the OBS "Audio Monitoring → Monitor Off" step earlier in the session (stops OBS from also playing the captured audio back through OBS's monitor device on top of Windows' direct path).
+- Added the conditional Sonar/Voicemeeter/Wavelink note about muting the AUX duplicate.
+
+### Release
+Tagged `v1.4.2`, pushed. Build & Release workflow publishes the artifacts; v1.4.1 clients see the update banner on next launch.
+
+---
+
 ## 2026-04-27 — Session 11 — v1.4.1 — OBS streaming via Window Capture + WASAPI audio bridge
 
 ### The problem

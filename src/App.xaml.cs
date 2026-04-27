@@ -16,7 +16,6 @@ public partial class App : Application
     private OverlayWindow? _overlay;
     private MiniBannerWindow? _banner;
     private GlobalHotkeyListener? _listener;
-    private AudioSessionRenamer? _audioRenamer;
 
     protected override async void OnStartup(StartupEventArgs e)
     {
@@ -85,12 +84,6 @@ public partial class App : Application
             Services.SelfUpdateService.ClearLastResult();
         }
 
-        // Rename WebView2 audio sessions so they show as "PulseNet Player"
-        // in Volume Mixer / Sonar / Wavelink instead of "msedgewebview2".
-        var audioLog = _host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("AudioSessionRenamer");
-        var exePath  = Environment.ProcessPath ?? string.Empty;
-        _audioRenamer = new AudioSessionRenamer(audioLog, "PulseNet Player", $"{exePath},0");
-        _audioRenamer.Start();
 
         // First hotkey press closes the splash; subsequent presses just toggle.
         void OnFirstHotkey(object? s, EventArgs _)
@@ -151,7 +144,6 @@ public partial class App : Application
 
     protected override async void OnExit(ExitEventArgs e)
     {
-        _audioRenamer?.Dispose();
         _trayIcon?.Dispose();
 
         if (_host is not null)
