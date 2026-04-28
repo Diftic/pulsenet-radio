@@ -41,7 +41,10 @@ Tune in while you fly. Keep it on while you fight. Let it run while you haul. Pu
 - **Configurable hotkey** — Toggle the overlay on/off with any key combination you choose
 - **Lock mode** — Lock the overlay in place to prevent accidental repositioning
 - **Global scroll passthrough** — Scroll wheel is only consumed when the cursor is over the overlay
-- **System tray integration** — Minimize to tray; toggle via hotkey or right-click tray menu
+- **Now Playing mini banner** — Compact "currently playing" banner stays visible when the overlay is hidden, so you always know the track without bringing the full frame back up
+- **Minimize behaviour** — Choose between minimizing to the system tray or to the mini banner; the toggle hotkey switches between full overlay and your chosen minimized state
+- **OBS streaming support** — Frame is capturable via OBS Window Capture (WGC); a built-in WASAPI audio bridge re-emits the player's audio on the `PulseNet-Player.exe` process so OBS Capture Audio (BETA) can pick it up directly. Opt-in *Streamer Mode* keeps the bridge dormant for non-streamers
+- **Auto-update** — Checks GitHub Releases on launch and offers an in-place update; a manual *Check for updates* button in Settings retriggers the check on demand
 
 ---
 
@@ -79,6 +82,10 @@ Either way, launch the app and the overlay appears immediately. Default toggle h
 | Change opacity | **Settings Menu** → opacity slider |
 | Change toggle hotkey | **Settings Menu** → hotkey field → press your combo |
 | Lock position | **Settings Menu** → **Lock / Unlock** |
+| Choose minimize behaviour (tray / banner) | **Settings Menu** → **Miniplayer Settings** → minimize mode |
+| Reposition / lock the mini banner | **Settings Menu** → **Miniplayer Settings** |
+| Configure OBS streaming | **Settings Menu** → **Streamer Info** *(includes the Streamer Mode toggle)* |
+| Check for updates manually | **Settings Menu** → **vX.Y.Z — Check for updates** |
 | Exit | Right-click tray icon → **Quit** |
 
 ---
@@ -127,9 +134,13 @@ PulseNet Player is a **.NET 9 WPF** application. All visual elements, the sci-fi
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | Overlay window | `src/UI/OverlayWindow.xaml.cs` | WPF host, hotkeys, drag engine, tray icon |
+| Mini banner window | `src/UI/MiniBannerWindow.xaml.cs` | Compact "Now Playing" banner shown while overlay is hidden |
 | Renderer | `src/Renderer/` | HTML/CSS/JS UI — frame, buttons, player |
 | Station config | `src/Renderer/stations.js` | All 19 stations: playlist IDs, icons, live flags |
 | Player controller | `src/Renderer/player.js` | YouTube IFrame API, settings bridge to C# |
+| Audio bridge | `src/Services/AudioBridge.cs` | WASAPI process-loopback re-emit so OBS Capture Audio (BETA) can pick up the WebView2 audio on `PulseNet-Player.exe` |
+| Update checker | `src/Services/UpdateChecker.cs` | Polls GitHub Releases for a newer version |
+| Self-update service | `src/Services/SelfUpdateService.cs` | Downloads the new exe, swaps in place, restarts |
 | Constants | `src/Constants.cs` | Frame dimensions, default values |
 | Settings model | `src/Models/PulsenetSettings.cs` | Persisted user preferences (JSON) |
 
@@ -192,7 +203,9 @@ All icons live in `src/Renderer/assets/stations/`. Each station requires two fil
 - [ ] Wire real YouTube playlist IDs for all 19 stations
 - [x] Volume control — provided by the embedded YouTube player
 - [x] "Now Playing" info — track title shown inside the YouTube embed
-- [x] Auto-update mechanism (in-app check + self-install)
+- [x] "Now Playing" mini banner — persistent compact track readout while the overlay is hidden
+- [x] OBS streaming support — Window Capture (WGC) + WASAPI process-loopback audio bridge with opt-in *Streamer Mode*
+- [x] Auto-update mechanism (in-app check on launch + manual recheck button + self-install)
 - [x] GitHub Actions CI — build + publish on tag push
 - [x] WiX installer (`PulseNet-Setup.msi`) + portable `.exe`
 
