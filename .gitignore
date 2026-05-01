@@ -20,3 +20,6 @@ installer/icon.ico
 # Logs
 *.log
 .codereview/
+
+# Local-only diagnostic harnesses (kept untracked per DEVLOG)
+tools/

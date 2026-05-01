@@ -4,6 +4,38 @@
 
 ---
 
+## 2026-05-01 — Session 15 — v1.6.3 — Capture-client AudioCategory + Streamer Info specifics
+
+### Background
+v1.5.0 shipped the StreamerMode toggle so non-streamers can opt out of the doubled-audio cost. v1.6.0 added the manual update path. With the workflow stable, today's session went deep on the actual streamer experience in SteelSeries Sonar. Three things came out of it: a real fix for the bridge's capture session, a specifics rewrite of the Streamer Info copy, and a confirmed architectural map of what's actually happening on the audio side.
+
+### What we mapped (the architecture side)
+With StreamerMode on, two render sessions exist on the default endpoint: `msedgewebview2.exe` (Chromium's direct audio path) and `PulseNet-Player.exe` (the AudioBridge re-emit). Both are correctly classified as Media via `IAudioClient2.SetClientProperties` (the v1.4.2 fix on the render client, plus a new matching call on the capture client this session). On systems with Sonar / Voicemeeter / Wavelink, both sessions land in the MEDIA channel cleanly.
+
+The "AUX duplicate" we hunted for half the session turned out to be a Sonar UI quirk: dragging an app entry between channels and back creates a phantom locked session that Sonar can't clean up. Don't drag, no duplicate.
+
+The doubled-audio cost when StreamerMode is on becomes a single-app-router decision: in Sonar / Voicemeeter / Wavelink, click the speaker-icon mute on `MSEDGEWEBVIEW2` in the MEDIA channel. Sonar's per-app mute is post-mix, so it silences the Chromium direct path without affecting the AudioBridge's process-loopback capture upstream. Bridge keeps capturing, re-emits via `PULSENET-PLAYER` (also in MEDIA), and the user hears one clean audio path attributed to `PulseNet-Player.exe`. OBS Window Capture's Capture Audio (BETA) sees the same clean session.
+
+A side note worth banking: process-loopback's mute is post-tap. If you call `ISimpleAudioVolume::SetMute` on the WebView2 session directly (the obvious "stealth bridge" instinct), the loopback capture goes silent at the same time. Tested via a standalone audio-probe tool (untracked, lives in `tools/audio-probe/`). Don't go down that path.
+
+### Capture-client AudioCategory.Media
+v1.4.2 only set `AudioStreamCategory.Media` on the bridge's render client. The capture client (process-loopback) inherited the default Other category, which caused it to land in Sonar's AUX channel under certain edge cases. Now matched: `SetClientProperties` is called on the capture client too before its `Initialize`. AUX leak no longer occurs at startup.
+
+### Streamer Info copy rewrite
+Old text said "PulseNet's clean audio is routed to the Media channel; the underlying browser engine appears as a duplicate (often in Aux) with degraded processing. Mute the duplicate's channel." That was vague and partly wrong (the AUX behaviour was a Sonar UI quirk, not a category miscall). New text names the specific entries (`PULSENET-PLAYER` vs `MSEDGEWEBVIEW2`), tells the user which one to mute and which one is the broadcast-clean re-emit, warns against dragging entries between channels, and points at the channel-level volume slider as the first place to check if audio sounds quiet.
+
+### Diagnostic infrastructure (kept untracked)
+`tools/audio-probe/` contains a standalone .NET test harness that:
+- `--pid <id>` mode mutes a target tree's audio sessions to verify whether process-loopback captures pre-mute or post-mute. Answer: post-mute. Stealth bridge via `SetMute` is not viable.
+- `--list` mode enumerates every render endpoint on the system, including disabled and unplugged ones, and dumps every session's PID, state, exe name, and display name. Surfaced the existence of Sonar's virtual endpoints (Game / Chat / Media / Aux / Stream / Microphone) plus a couple of Elgato Wave Link virtual outputs that exist on the dev box.
+
+Kept untracked so it doesn't bloat the shipped repo or distract future readers. Lives only in the working tree.
+
+### Release
+Tagged `v1.6.3`. Build & Release workflow publishes; v1.6.1 clients see the update banner on next launch (auto-check) or via the manual button. No user-visible behaviour change unless they're on Sonar with StreamerMode on, in which case the AUX leak is gone at startup and the Streamer Info text now actually tells them which entry to mute.
+
+---
+
 ## 2026-04-28 — Session 14 — v1.6.0 — Manual update check + version banner
 
 ### What was missing

@@ -134,7 +134,7 @@
           <li>Tick <strong>Client Area</strong>.</li>
           <li>Open OBS &rarr; <strong>Edit</strong> &rarr; <strong>Advanced Audio Properties</strong>. For your Window Capture source, set <strong>Audio Monitoring</strong> to <em>Monitor Off</em> &mdash; this stops the broadcast audio echoing back into your headphones.</li>
         </ol>
-        <p class="streamer-info-tip"><strong>Using SteelSeries Sonar / Voicemeeter / Wavelink?</strong> PulseNet's clean audio is routed to the <em>Media</em> channel; the underlying browser engine appears as a duplicate (often in <em>Aux</em>) with degraded processing. Mute the duplicate's channel &mdash; you'll hear only the clean Media copy, and your broadcast is unaffected.</p>
+        <p class="streamer-info-tip"><strong>Using SteelSeries Sonar / Voicemeeter / Wavelink?</strong> Two sessions appear in your <em>Media</em> channel at startup: <strong>PULSENET-PLAYER</strong> (the broadcast-clean re-emit) and <strong>MSEDGEWEBVIEW2</strong> (the original browser audio). Click the speaker icon next to MSEDGEWEBVIEW2 to mute it. You'll then hear only the PULSENET-PLAYER copy, and your broadcast captures the clean stream. Avoid dragging entries between channels; some routing apps will create stuck phantom duplicates. If the audio sounds quiet, check the Media channel's volume slider before reaching for Windows volume.</p>
         <p class="streamer-info-tip">Press <strong>F9</strong> to hide the player from your monitor &mdash; viewers still see it in your stream.</p>
       </div>
     </div>

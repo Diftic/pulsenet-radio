@@ -195,6 +195,22 @@ internal sealed class AudioBridge : IHostedService, IDisposable
             captureClient = ActivateProcessLoopback(webView2Pid);
             if (captureClient is null) return false;
 
+            // Same Media-category declaration as the render client so this
+            // session also lands in Sonar's MEDIA channel rather than AUX/Other.
+            if (captureClient is IAudioClient2 captureClient2)
+            {
+                var capProps = new AudioClientProperties
+                {
+                    cbSize     = (uint)Marshal.SizeOf<AudioClientProperties>(),
+                    bIsOffload = false,
+                    eCategory  = AudioStreamCategory.Media,
+                    Options    = AudioStreamOptions.None,
+                };
+                var hrCapProps = captureClient2.SetClientProperties(ref capProps);
+                if (hrCapProps != 0)
+                    _logger.LogDebug("Capture SetClientProperties returned 0x{Hr:X8}", hrCapProps);
+            }
+
             captureEvent = CreateEventW(IntPtr.Zero, false, false, IntPtr.Zero);
             hr = captureClient.Initialize(
                 AUDCLNT_SHAREMODE_SHARED,

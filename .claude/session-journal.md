@@ -3,10 +3,17 @@
 A living journal that persists across compactions. Captures decisions, progress, and context.
 
 ## Current State
-- **Focus:** v1.6.0 shipped — manual "Check for updates" button + live version banner in main settings panel. Reuses existing `UpdateChecker` + `SelfUpdateService` so the manual path matches the auto-check path. `window.__pulsenetVersion` injected on document creation so the label is correct on first render.
+- **Focus:** v1.6.3 in flight — capture-client `AudioCategory.Media` parity with the v1.4.2 render-client fix (closes Sonar AUX-leak edge case at startup) + Streamer Info copy rewrite naming `MSEDGEWEBVIEW2` vs `PULSENET-PLAYER` and the don't-drag-channels caveat. Red-team audit landed under `audits/`; `tools/audio-probe/` diagnostic harness now `.gitignore`'d. Version was briefly labelled v1.6.2 in the working tree, relabelled to v1.6.3 at commit time.
 - **Blocked:** Real playlist IDs for 18 stations not yet provided.
 
 ## Log
+
+### 2026-05-01 — Completed: v1.6.3 — capture-client AudioCategory.Media + Streamer Info specifics
+- **Capture-client fix.** v1.4.2 set `AudioStreamCategory.Media` on the bridge's render client only. The capture (process-loopback) client inherited the default `Other` category, which caused intermittent AUX-channel placement on Sonar at startup. Added matching `IAudioClient2.SetClientProperties` call before `Initialize` on the capture client in `src/Services/AudioBridge.cs`.
+- **Streamer Info copy.** `src/Renderer/index.html` rewritten: names the two MEDIA-channel sessions explicitly (`MSEDGEWEBVIEW2` is the one to mute, `PULSENET-PLAYER` is the broadcast-clean re-emit), warns against dragging entries between channels (creates phantom locked duplicates Sonar can't clean up), and points at the channel-level volume slider as the first thing to check if audio sounds quiet.
+- **Diagnostic harness.** `tools/audio-probe/` (new, untracked + `.gitignore`'d): standalone .NET probe with `--pid` mode (verified loopback capture is post-mute, so `SetMute` stealth-bridge isn't viable) and `--list` mode (enumerates all render endpoints + their sessions, surfaced Sonar/Wave Link virtual outputs). Lives in working tree only.
+- **Audit.** `audits/2026-04-30-red-team.md` committed: 2 CRITICAL (MSI signing, supply-chain tier), several HIGH around the auto-update path, with the same-user local attacks accepted as out-of-scope per the OSS-desktop threat model. New "Code health" section in TODO breaks the actionable items into a block-public-release tier and a defense-in-depth tier.
+- **Version labelling.** Working tree was labelled v1.6.2 mid-session (csproj, DEVLOG, TODO, audit header). At release time the user asked for a `+0.0.1` bump, so all references were relabelled to v1.6.3 in one pass before commit. Audit's snapshot reference updated alongside so the file stays internally consistent.
 
 ### 2026-04-28 — Completed: v1.6.0 — manual update check + version banner
 - **Gap.** Auto-update-check on startup existed since v1.4.x, but no in-app way to retrigger between launches and no in-app surface for the current version number. PyCharm crashed mid-session; recovered the work-in-progress diff (5 files modified) and finished it.
