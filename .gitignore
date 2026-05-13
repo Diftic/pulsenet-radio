@@ -23,3 +23,23 @@ installer/icon.ico
 
 # Local-only diagnostic harnesses (kept untracked per DEVLOG)
 tools/
+
+# Ruflo runtime state (config and static defs are tracked)
+.claude-flow/data/
+.claude-flow/logs/
+.claude-flow/sessions/
+.claude-flow/metrics/
+.claude-flow/security/
+.claude-flow/swarm/
+.claude-flow/daemon-state.json
+.claude-flow/daemon.pid
+
+# Ruflo databases (local SQLite/vector stores)
+.claude/memory.db
+.claude/memory.db-shm
+.claude/memory.db-wal
+.swarm/memory.db
+.swarm/memory.db-shm
+.swarm/memory.db-wal
+.swarm/state.json
+ruvector.db
