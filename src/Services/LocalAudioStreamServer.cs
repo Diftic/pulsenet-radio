@@ -21,6 +21,14 @@ using Microsoft.Extensions.Logging;
 /// the system mix format so we don't resample). The data chunk in the WAV header
 /// is sized to int.MaxValue so ffmpeg-backed players (OBS Media Source) treat the
 /// stream as effectively endless.
+///
+/// Architecture: the WASAPI capture pump enqueues PCM into a bounded ring buffer
+/// (non-blocking, drops oldest on overflow). A dedicated writer thread drains the
+/// ring to the active TCP socket — so a slow or stalled consumer can no longer
+/// wedge the capture thread on a blocking <see cref="NetworkStream.Write(byte[],int,int)"/>.
+/// Brief consumer pauses produce a small time-shift in the listener's stream (the
+/// dropped samples were never received); permanent stalls keep the app healthy and
+/// only require the consumer to reconnect to resume.
 /// </summary>
 internal sealed class LocalAudioStreamServer : IHostedService, IDisposable
 {
@@ -28,14 +36,27 @@ internal sealed class LocalAudioStreamServer : IHostedService, IDisposable
     public const int OutputChannels = 2;
     public const int OutputBitsPerSample = 16;
 
+    // Ring sized for ~2.6 s at 96 kHz / 2 ch / 16-bit (1 MB / 384 KB/s). Covers
+    // typical browser pre-buffer hiccups without dropping; on permanent stalls
+    // oldest samples are evicted so the pump stays at realtime.
+    private const int RingBufferCapacity = 1024 * 1024;
+
     private readonly ILogger<LocalAudioStreamServer> _logger;
     private TcpListener? _listener;
     private CancellationTokenSource? _cts;
     private Thread? _acceptThread;
+    private Thread? _writerThread;
 
     private readonly object _connLock = new();
     private NetworkStream? _activeStream;
     private TcpClient? _activeClient;
+
+    private readonly object _ringLock = new();
+    private readonly byte[] _ring = new byte[RingBufferCapacity];
+    private int _ringHead;
+    private int _ringTail;
+    private int _ringCount;
+    private readonly ManualResetEventSlim _ringDataAvailable = new(false);
 
     private int _sampleRate;
     private volatile bool _formatReady;
@@ -59,8 +80,10 @@ internal sealed class LocalAudioStreamServer : IHostedService, IDisposable
             return Task.CompletedTask;
         }
 
-        _acceptThread = new Thread(AcceptLoop) { IsBackground = true, Name = "LocalAudioStream" };
+        _acceptThread = new Thread(AcceptLoop) { IsBackground = true, Name = "LocalAudioStream-Accept" };
         _acceptThread.Start();
+        _writerThread = new Thread(WriterLoop) { IsBackground = true, Name = "LocalAudioStream-Writer" };
+        _writerThread.Start();
         _logger.LogInformation(
             "LocalAudioStreamServer listening on http://127.0.0.1:{Port}/stream.wav", Port);
         return Task.CompletedTask;
@@ -69,13 +92,19 @@ internal sealed class LocalAudioStreamServer : IHostedService, IDisposable
     public Task StopAsync(CancellationToken cancellationToken)
     {
         _cts?.Cancel();
+        try { _ringDataAvailable.Set(); } catch { /* ignore */ }
         try { _listener?.Stop(); } catch { /* ignore */ }
         DropActive();
         _acceptThread?.Join(2000);
+        _writerThread?.Join(2000);
         return Task.CompletedTask;
     }
 
-    public void Dispose() => _cts?.Dispose();
+    public void Dispose()
+    {
+        _cts?.Dispose();
+        _ringDataAvailable.Dispose();
+    }
 
     /// <summary>
     /// Called by AudioBridge once the WebView2 mix format is known. Until this
@@ -90,26 +119,111 @@ internal sealed class LocalAudioStreamServer : IHostedService, IDisposable
 
     /// <summary>
     /// Push a 16-bit PCM stereo frame buffer to the active connection (if any).
-    /// Bridge calls this from the audio pump thread; failure here just drops the
-    /// connection and the next OBS reconnect will get a fresh WAV header.
+    /// Non-blocking: bytes are appended to the ring buffer and a dedicated writer
+    /// thread drains them to the socket. When the ring is full because the consumer
+    /// can't keep up, the oldest queued bytes are dropped so the WASAPI capture
+    /// thread never blocks on network I/O.
     /// </summary>
     public void Write(ReadOnlySpan<byte> data)
     {
-        if (_activeStream is null) return;
-        try
+        if (_activeStream is null || data.Length == 0) return;
+
+        // A single packet larger than the whole ring would wipe everything else
+        // queued; in practice WASAPI packets are well under 16KB, so this only
+        // protects against future buffer-size mistakes.
+        if (data.Length > RingBufferCapacity)
         {
-            lock (_connLock)
-            {
-                _activeStream?.Write(data);
-            }
+            data = data[^RingBufferCapacity..];
         }
-        catch
+
+        lock (_ringLock)
         {
-            DropActive();
+            int freeSpace = RingBufferCapacity - _ringCount;
+            if (data.Length > freeSpace)
+            {
+                int drop = data.Length - freeSpace;
+                _ringHead = (_ringHead + drop) % RingBufferCapacity;
+                _ringCount -= drop;
+            }
+
+            int firstChunk = Math.Min(data.Length, RingBufferCapacity - _ringTail);
+            data[..firstChunk].CopyTo(_ring.AsSpan(_ringTail, firstChunk));
+            int remaining = data.Length - firstChunk;
+            if (remaining > 0)
+            {
+                data[firstChunk..].CopyTo(_ring.AsSpan(0, remaining));
+            }
+            _ringTail = (_ringTail + data.Length) % RingBufferCapacity;
+            _ringCount += data.Length;
+
+            _ringDataAvailable.Set();
         }
     }
 
     public bool HasClient => _activeStream is not null;
+
+    // -------------------------------------------------------------------------
+    // Writer thread — drains ring buffer to the active socket
+    // -------------------------------------------------------------------------
+
+    private void WriterLoop()
+    {
+        var token = _cts!.Token;
+        var drainBuf = new byte[16 * 1024];
+
+        while (!token.IsCancellationRequested)
+        {
+            try { _ringDataAvailable.Wait(token); }
+            catch (OperationCanceledException) { break; }
+
+            while (!token.IsCancellationRequested)
+            {
+                int taken;
+                lock (_ringLock)
+                {
+                    if (_ringCount == 0)
+                    {
+                        // Reset inside lock so a producer Set() racing with us
+                        // can't be lost — producer holds _ringLock when calling
+                        // Set, so any Set after our Reset must have come after
+                        // a new enqueue we'll see on the next iteration.
+                        _ringDataAvailable.Reset();
+                        break;
+                    }
+                    taken = Math.Min(_ringCount, drainBuf.Length);
+                    int firstChunk = Math.Min(taken, RingBufferCapacity - _ringHead);
+                    Array.Copy(_ring, _ringHead, drainBuf, 0, firstChunk);
+                    int remaining = taken - firstChunk;
+                    if (remaining > 0)
+                    {
+                        Array.Copy(_ring, 0, drainBuf, firstChunk, remaining);
+                    }
+                    _ringHead = (_ringHead + taken) % RingBufferCapacity;
+                    _ringCount -= taken;
+                }
+
+                // Snapshot outside any lock so a concurrent DropActive() can
+                // dispose the stream and unblock us mid-Write.
+                var stream = Volatile.Read(ref _activeStream);
+                if (stream is null) continue;
+
+                try
+                {
+                    stream.Write(drainBuf, 0, taken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex,
+                        "WriterLoop Write failed after {Bytes} bytes; dropping connection",
+                        taken);
+                    // Only tear down the connection if it's still the one we
+                    // were writing to — otherwise ServeClient may have already
+                    // installed a fresher client we mustn't kill.
+                    DropIfActive(stream);
+                }
+            }
+        }
+    }
 
     // -------------------------------------------------------------------------
     // Connection handling
@@ -192,7 +306,15 @@ internal sealed class LocalAudioStreamServer : IHostedService, IDisposable
             return;
         }
 
+        // Tear down any previous connection, flush any stale audio queued during
+        // the gap so the new client starts on current samples, then install the
+        // socket. The writer thread picks it up on its next ring-drain cycle.
         DropActive();
+        lock (_ringLock)
+        {
+            _ringHead = _ringTail = _ringCount = 0;
+            _ringDataAvailable.Reset();
+        }
         lock (_connLock)
         {
             _activeStream = stream;
@@ -211,6 +333,18 @@ internal sealed class LocalAudioStreamServer : IHostedService, IDisposable
     {
         lock (_connLock)
         {
+            try { _activeStream?.Dispose(); } catch { /* ignore */ }
+            try { _activeClient?.Dispose(); } catch { /* ignore */ }
+            _activeStream = null;
+            _activeClient = null;
+        }
+    }
+
+    private void DropIfActive(NetworkStream stream)
+    {
+        lock (_connLock)
+        {
+            if (!ReferenceEquals(_activeStream, stream)) return;
             try { _activeStream?.Dispose(); } catch { /* ignore */ }
             try { _activeClient?.Dispose(); } catch { /* ignore */ }
             _activeStream = null;

@@ -4,6 +4,47 @@
 
 ---
 
+## 2026-05-13 - v1.8.2 - LocalAudioStreamServer ring buffer fixes producer wedge
+
+### Bug
+Streaming `http://127.0.0.1:17329/stream.wav` cut out after ~11 seconds and never recovered without a reconnect. Reproduced identically in OBS Media Source and Chrome (browser progress bar showed ~12 s buffered, played ~8 s, then no more data loaded). Local in-app audio was unaffected.
+
+### Root cause
+`LocalAudioStreamServer.Write` did a synchronous `NetworkStream.Write` inside `_connLock` with `WriteTimeout = Infinite`. Producer rate is ~384 KB/s (96 kHz / 2ch / 16-bit at the dev box's mix format); Windows' default TCP send buffer (~64 KB) drains in ~170 ms. The moment the consumer hit any internal buffer-fill pause (Chrome's prefetch-then-wait policy, OBS's network buffer), the send buffer filled and `Write` blocked forever. The audio-pump thread was wedged holding the lock, so even `DropActive` from a racing `ServeClient` couldn't reclaim the connection — only an OS-level FIN/RST from the client (closing the tab / disabling the OBS source) broke the write. v1.8.0's 5-second smoke probe was too short to hit it.
+
+### Fix
+Rewrote `Services/LocalAudioStreamServer.cs` so the WASAPI capture pump never touches the socket. New layout:
+
+```
+AudioBridge.PushToStream
+    │   (non-blocking enqueue, drops oldest on overflow)
+    ▼
+1 MB ring buffer (~2.6 s at 96 kHz)
+    │   (dedicated "LocalAudioStream-Writer" thread)
+    ▼
+NetworkStream.Write → consumer
+```
+
+`Write` enqueues into the ring under a small lock and `Set`s a `ManualResetEventSlim`. The writer thread `Wait`s on the event, drains the ring into a 16 KB scratch buffer, then writes outside any lock. On overflow (consumer slower than the producer for >2.6 s), the oldest queued bytes are evicted — the listener experiences a forward time-skip in audio content, but the stream stays alive. On `Write` exception, `DropIfActive(stream)` uses `ReferenceEquals` to make sure the writer isn't tearing down a fresher connection that a racing `ServeClient` already installed. Ring is flushed on every new client connect so reconnects start on current samples. `Set`/`Reset` both happen inside `_ringLock` to make the producer/writer signal race-free.
+
+### Tradeoff
+- Brief consumer pauses (< ring capacity, ~2.6 s) absorb cleanly with no drops.
+- Longer pauses drop oldest samples — audio jumps forward but never stalls.
+- Permanent consumer stall no longer wedges the app — pump keeps capturing, ring keeps cycling, only a new connection resumes the audible stream.
+
+### Validation
+- Build: 0 warnings, 0 errors on `dotnet build`.
+- Curl probe (line-rate reader, no buffering): 5.4 MB / 14 s = 384 KB/s sustained, exactly matching the producer rate.
+- Real-app: PulseNet started, station playing, OBS Media Source connected to the URL — audio continuous for 60+ seconds in OBS with no cut-outs and no producer-side reconnect loop. `WriterLoop Write failed` defensive log (added in the writer thread's catch as a future-debug hook) never fired during testing.
+
+### Release
+Tagged `v1.8.2`. v1.8.1 clients see the update banner on next launch (auto-check) or via the manual button.
+
+### Known-and-deferred
+Server is still single-connection-by-design: opening a browser tab on the URL while OBS is connected will displace OBS, and vice-versa. Multi-consumer broadcast (one ring, N socket writers) is a possible follow-up but not needed for the documented OBS Media Source workflow.
+
+---
+
 ## 2026-05-01 - v1.8.1 - Streamer Info polish
 
 Two small follow-ups after looking at v1.8.0 in real use:
