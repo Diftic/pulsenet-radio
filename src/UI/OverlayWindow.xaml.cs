@@ -500,6 +500,23 @@ public partial class OverlayWindow : Window
                         : "dQw4w9WgXcQ";
                     _ = _nativeAudio.PlayVideoIdAsync(testVideoId);
                     break;
+
+                // Phase B event forwarding from the JS-side YT.Player. State and
+                // time messages are logged here so we can validate the event flow
+                // before Phase C wires them to NativeAudioPlayer for real sync.
+                case "playerStateChange":
+                    var psState   = root.GetProperty("state").GetInt32();
+                    var psVideoId = root.TryGetProperty("videoId",     out var psv) ? psv.GetString() : null;
+                    var psTime    = root.TryGetProperty("currentTime", out var pst) ? pst.GetDouble() : 0;
+                    _logger.LogDebug("playerStateChange state={State} videoId={VideoId} time={Time:F2}",
+                        psState, psVideoId, psTime);
+                    break;
+
+                case "playerTimeUpdate":
+                    var ptVideoId = root.TryGetProperty("videoId",     out var ptv) ? ptv.GetString() : null;
+                    var ptTime    = root.TryGetProperty("currentTime", out var ptt) ? ptt.GetDouble() : 0;
+                    _logger.LogTrace("playerTimeUpdate videoId={VideoId} time={Time:F2}", ptVideoId, ptTime);
+                    break;
             }
         }
         catch (Exception ex)

@@ -20,7 +20,10 @@ window.STATIONS = [
   { id: 'r1', label: 'Pulse Retro',          playlistId: 'UUIMaIJsfJEMi5yJIe5nAb0g', icon: 'assets/stations/PulseNet_-_Pulse_Retro_station_logo.png',         side: 'right', slot: 1, live: false },
   { id: 'r2', label: 'PulseVision Audio',    playlistId: 'UUIMaIJsfJEMi5yJIe5nAb0g', icon: 'assets/stations/PulseNet_-_PulseVision_Audio_station_logo.png',   side: 'right', slot: 2, live: false },
   { id: 'r3', label: 'Quantum Drive',        playlistId: 'UUIMaIJsfJEMi5yJIe5nAb0g', icon: 'assets/stations/PulseNet_-_Quantum_Drive_logo.png',                side: 'right', slot: 3, live: false },
-  { id: 'r4', label: 'Solaris Classical',    playlistId: 'UUIMaIJsfJEMi5yJIe5nAb0g', icon: 'assets/stations/PulseNet_-_Solaris_Classical_station_logo.png',   side: 'right', slot: 4, live: false },
+  // Solaris Classical: ships as an "obvious Easter egg" while the broadcaster
+  // is still spinning the station up. Replace videoId with the real playlistId
+  // once Solaris's content goes live.
+  { id: 'r4', label: 'Solaris Classical',    videoId:    'dQw4w9WgXcQ',              icon: 'assets/stations/PulseNet_-_Solaris_Classical_station_logo.png',   side: 'right', slot: 4, live: true  },
   { id: 'r5', label: 'Spectrum Beats',       playlistId: 'UUIMaIJsfJEMi5yJIe5nAb0g', icon: 'assets/stations/PulseNet_-_Spectrum_Beats_logo.png',               side: 'right', slot: 5, live: false },
   { id: 'r6', label: 'Starlight Lounge',     playlistId: 'UUIMaIJsfJEMi5yJIe5nAb0g', icon: 'assets/stations/PulseNet_-_Starlight_Lounge_station_logo.png',    side: 'right', slot: 6, live: false },
   { id: 'r7', label: 'The Cargo Deck',       playlistId: 'UUIMaIJsfJEMi5yJIe5nAb0g', icon: 'assets/stations/PulseNet_-_The_Cargo_Deck_station_logo.png',      side: 'right', slot: 7, live: false },

@@ -352,6 +352,53 @@
     if (event.data === YT.PlayerState.ENDED && !activeBtn) {
       showIdleLogo();
     }
+    // Phase B: forward state changes to host so the native audio half
+    // (Option 2 architecture) can mirror play / pause / track-change. Host
+    // logs only in Phase B; Phase C wires it to NativeAudioPlayer.
+    postPlayerState(event.data);
+  }
+
+  // Posts current YT.Player state + videoId + currentTime to host. Called from
+  // onPlayerStateChange on every transition.
+  function postPlayerState(state) {
+    try {
+      var videoId = '';
+      var currentTime = 0;
+      if (player && player.getVideoData) {
+        var data = player.getVideoData();
+        if (data && data.video_id) videoId = data.video_id;
+      }
+      if (player && player.getCurrentTime) {
+        currentTime = player.getCurrentTime() || 0;
+      }
+      window.chrome.webview.postMessage(JSON.stringify({
+        type:        'playerStateChange',
+        state:       state,
+        videoId:     videoId,
+        currentTime: currentTime
+      }));
+    } catch (_) {}
+  }
+
+  // Posts current playback position to host while PLAYING. Used by Phase C's
+  // drift-correction loop to keep the native audio in sync with the iframe.
+  function postPlayerTime() {
+    try {
+      var videoId = '';
+      var currentTime = 0;
+      if (player && player.getVideoData) {
+        var data = player.getVideoData();
+        if (data && data.video_id) videoId = data.video_id;
+      }
+      if (player && player.getCurrentTime) {
+        currentTime = player.getCurrentTime() || 0;
+      }
+      window.chrome.webview.postMessage(JSON.stringify({
+        type:        'playerTimeUpdate',
+        videoId:     videoId,
+        currentTime: currentTime
+      }));
+    } catch (_) {}
   }
 
   function onPlayerError(event) {
@@ -382,6 +429,7 @@
   setInterval(function () {
     if (playerReady && player && player.getPlayerState() === YT.PlayerState.PLAYING) {
       updateTrackTitle();
+      postPlayerTime();
     }
   }, 2000);
 
