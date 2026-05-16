@@ -359,7 +359,9 @@
   }
 
   // Posts current YT.Player state + videoId + currentTime to host. Called from
-  // onPlayerStateChange on every transition.
+  // onPlayerStateChange on every transition. isLive flag tells the host to
+  // route to NativeAudioPlayer.PlayLiveAsync (HLS) instead of PlayVideoIdAsync
+  // (progressive audio) for the new-play branch.
   function postPlayerState(state) {
     try {
       var videoId = '';
@@ -375,13 +377,16 @@
         type:        'playerStateChange',
         state:       state,
         videoId:     videoId,
-        currentTime: currentTime
+        currentTime: currentTime,
+        isLive:      liveStreamActive
       }));
     } catch (_) {}
   }
 
   // Posts current playback position to host while PLAYING. Used by Phase C's
   // drift-correction loop to keep the native audio in sync with the iframe.
+  // Live streams skip drift correction host-side (isLive flag) since there is
+  // no meaningful position sync between two independent live-edge consumers.
   function postPlayerTime() {
     try {
       var videoId = '';
@@ -396,7 +401,8 @@
       window.chrome.webview.postMessage(JSON.stringify({
         type:        'playerTimeUpdate',
         videoId:     videoId,
-        currentTime: currentTime
+        currentTime: currentTime,
+        isLive:      liveStreamActive
       }));
     } catch (_) {}
   }

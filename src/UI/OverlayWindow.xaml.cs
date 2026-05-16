@@ -510,27 +510,31 @@ public partial class OverlayWindow : Window
                     _ = _nativeAudio.PlayVideoIdAsync(testVideoId);
                     break;
 
-                // Phase C: drive NativeAudioPlayer from JS-side YT.Player state.
+                // Phase C / D: drive NativeAudioPlayer from JS-side YT.Player state.
                 // YT.PlayerState values: -1 unstarted, 0 ended, 1 playing,
                 // 2 paused, 3 buffering, 5 cued. We act on 0 / 1 / 2 only;
                 // -1, 3, 5 are transient and resolved by a subsequent state=1.
+                // isLive routes the new-play branch to PlayLiveAsync (HLS).
                 case "playerStateChange":
                     var psState   = root.GetProperty("state").GetInt32();
                     var psVideoId = root.TryGetProperty("videoId",     out var psv) ? psv.GetString() : null;
                     var psTime    = root.TryGetProperty("currentTime", out var pst) ? pst.GetDouble() : 0;
-                    _logger.LogDebug("playerStateChange state={State} videoId={VideoId} time={Time:F2}",
-                        psState, psVideoId, psTime);
-                    HandlePlayerStateChange(psState, psVideoId, psTime);
+                    var psIsLive  = root.TryGetProperty("isLive",      out var psl) && psl.GetBoolean();
+                    _logger.LogDebug("playerStateChange state={State} videoId={VideoId} time={Time:F2} live={Live}",
+                        psState, psVideoId, psTime, psIsLive);
+                    HandlePlayerStateChange(psState, psVideoId, psTime, psIsLive);
                     break;
 
                 // Drift correction. Triggered every ~2s while iframe is playing.
                 // Compares iframe's currentTime to native player's position; if
                 // they diverge past 500ms (and we're past the post-kickoff
                 // settle window), seeks the native player to match the iframe.
+                // Skipped for live streams - position sync has no meaning.
                 case "playerTimeUpdate":
                     var ptVideoId = root.TryGetProperty("videoId",     out var ptv) ? ptv.GetString() : null;
                     var ptTime    = root.TryGetProperty("currentTime", out var ptt) ? ptt.GetDouble() : 0;
-                    HandlePlayerTimeUpdate(ptVideoId, ptTime);
+                    var ptIsLive  = root.TryGetProperty("isLive",      out var ptl) && ptl.GetBoolean();
+                    HandlePlayerTimeUpdate(ptVideoId, ptTime, ptIsLive);
                     break;
             }
         }
@@ -544,7 +548,7 @@ public partial class OverlayWindow : Window
     // Phase C iframe-to-native sync
     // -------------------------------------------------------------------------
 
-    private void HandlePlayerStateChange(int state, string? videoId, double iframeTime)
+    private void HandlePlayerStateChange(int state, string? videoId, double iframeTime, bool isLive)
     {
         switch (state)
         {
@@ -552,11 +556,17 @@ public partial class OverlayWindow : Window
                 if (string.IsNullOrEmpty(videoId)) return;
                 if (!string.Equals(_activeNativeVideoId, videoId, StringComparison.Ordinal))
                 {
-                    // Station or track change — new play.
+                    // Station or track change — new play. Route based on isLive:
+                    // live broadcasts only have HLS manifests, VOD has progressive
+                    // audio-only streams.
                     _activeNativeVideoId = videoId;
                     _nativePlayKickoff   = DateTime.UtcNow;
-                    _logger.LogInformation("Native audio: starting playback for {VideoId}", videoId);
-                    _ = _nativeAudio.PlayVideoIdAsync(videoId);
+                    _logger.LogInformation("Native audio: starting {Kind} playback for {VideoId}",
+                        isLive ? "live" : "VOD", videoId);
+                    if (isLive)
+                        _ = _nativeAudio.PlayLiveAsync(videoId);
+                    else
+                        _ = _nativeAudio.PlayVideoIdAsync(videoId);
                 }
                 else
                 {
@@ -588,8 +598,9 @@ public partial class OverlayWindow : Window
     private static readonly TimeSpan NativeDriftThreshold = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan NativeKickoffSettle  = TimeSpan.FromSeconds(3);
 
-    private void HandlePlayerTimeUpdate(string? videoId, double iframeTime)
+    private void HandlePlayerTimeUpdate(string? videoId, double iframeTime, bool isLive)
     {
+        if (isLive) return; // no drift correction for live streams
         if (string.IsNullOrEmpty(videoId)) return;
         if (!string.Equals(_activeNativeVideoId, videoId, StringComparison.Ordinal)) return;
         if (DateTime.UtcNow - _nativePlayKickoff < NativeKickoffSettle) return;
