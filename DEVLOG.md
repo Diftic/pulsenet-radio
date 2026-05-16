@@ -78,6 +78,20 @@ Option 2 is materially complete. Branch `feature/native-audio-option2` is 10 com
 
 Tester impact is gated by the Windows hook-IL question, not this work. The audio architecture validates, the OBS workflow simplifies to one source, and testers will see one clean audio session whenever the build is shipped.
 
+### Late-day cleanup: Phase F + buffering-drift fix + Easter-egg thumbnail
+
+Three more landings after the Phase E rip before stopping for the day.
+
+**Phase F - URL expiration recovery.** Hooked `MediaPlayer.MediaFailed` in `NativeAudioPlayer` to re-resolve the current videoId via YoutubeExplode and restart playback. `_isCurrentlyLive` tracks whether the retry should route through `PlayLiveAsync` (HLS) or `PlayVideoIdAsync` (progressive). Skip retry on `DecodingError` / `SourceNotSupported` since re-resolving won't fix those. Bounded retries: 3 within a 60-second window. Host-side drift correction re-aligns position on the next playerTimeUpdate tick so no manual seek is needed in the recovery path. Real-world URL-expiry validation deferred to organic long listening sessions; the smoke-test network cut didn't drain the audio buffer deeply enough to exercise MediaFailed.
+
+**Buffering-drift fix.** Smoke testing surfaced a Phase C bug. `HandlePlayerStateChange` only acted on YT.PlayerState 1/2/0, treating state=3 BUFFERING as transient. During buffering the iframe's clock freezes while the native player keeps playing whatever it has buffered, so on a 30-second internet cut the native player ran ~134 seconds ahead of the iframe and drift correction then rewound it audibly on resume. Fix: handle state=3 as a Pause; in the state=1 same-videoId resume branch, run an immediate drift check + seek so any pre-existing gap gets corrected at resume time instead of waiting for the next 2-second playerTimeUpdate. Verified by repeating the network-cut test: native now pauses the moment iframe enters buffering, both resume in sync, no rewind.
+
+**Easter-egg thumbnail.** Solaris Classical (r4) wiring had also accidentally flipped `live:true`, switching the hover thumbnail to the online version. The intended framing is that the station looks dormant like its 17 siblings and clicking it reveals Rick Astley. Reverted to `live:false`; activation still uses the videoId, only the thumbnail differs.
+
+### Branch summary at end of day
+
+`feature/native-audio-option2` is 14 commits ahead of master (local-only per the migration-fallback rule). Option 2 audio half is feature-complete: muted WebView2 video + native player slaved to YT IFrame API + buffering-aware sync + URL-expiry recovery + single OBS source + one Sonar session. Remaining work before merge: Windows Service helper for hotkey delivery (Option 3, requires per-machine MSI conversion), drag-stick bug verification, Console Ctrl+C handler, real playlist IDs as broadcasters ship them.
+
 ---
 
 ## 2026-05-13 - v1.8.2 - LocalAudioStreamServer ring buffer fixes producer wedge
