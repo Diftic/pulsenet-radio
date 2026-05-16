@@ -10,24 +10,27 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $existing = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
-if (-not $existing) {
-    Write-Host "Task '$TaskName' is not registered."
-    return
-}
-
-if ($existing.State -eq 'Running') {
+if ($existing -and $existing.State -eq 'Running') {
     Write-Host "Stopping running task"
-    Stop-ScheduledTask -TaskName $TaskName
-    # Stop-ScheduledTask returns before the process exits; give it a moment to
-    # release its exe handle so a subsequent rebuild doesn't get locked out.
-    Start-Sleep -Seconds 1
+    Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
 }
 
-# In case the helper exe was started by the task but didn't exit when the task
-# stopped (e.g., user pressed Ctrl+C inside the task's process scope), terminate
-# any straggler so the exe handle releases.
-Get-Process -Name 'PulseNetHotkeyService' -ErrorAction SilentlyContinue |
-    Stop-Process -Force -ErrorAction SilentlyContinue
+# Kill the helper process(es) regardless of whether the task existed - the MSI
+# uninstall path needs the exe handle released before RemoveFiles can succeed,
+# and a manually-launched dev helper from an earlier session may still hold it.
+$procs = Get-Process -Name 'PulseNetHotkeyService' -ErrorAction SilentlyContinue
+if ($procs) {
+    Write-Host "Terminating $($procs.Count) helper process(es)"
+    $procs | Stop-Process -Force -ErrorAction SilentlyContinue
+    # Wait-Process blocks until the OS reaps the process. Without this the exe
+    # file handle can linger briefly into the next MSI step and lock RemoveFiles.
+    try { Wait-Process -Name 'PulseNetHotkeyService' -Timeout 5 -ErrorAction SilentlyContinue } catch {}
+    Start-Sleep -Milliseconds 500
+}
 
-Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
-Write-Host "Task '$TaskName' removed."
+if ($existing) {
+    Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false
+    Write-Host "Task '$TaskName' removed."
+} else {
+    Write-Host "Task '$TaskName' was not registered (helper process cleaned up only)."
+}

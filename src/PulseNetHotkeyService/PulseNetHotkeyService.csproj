@@ -1,16 +1,17 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <OutputType>Exe</OutputType>
+        <!-- WinExe (not Exe) so Windows doesn't allocate a console window when
+             the scheduled task launches this binary in the user's session.
+             Developer-console runs from PowerShell inherit the parent console
+             and still see ILogger output via the Console logger; scheduled-task
+             launches have no parent console so console output goes nowhere
+             (the EventLog logger is wired for production diagnostics). -->
+        <OutputType>WinExe</OutputType>
         <TargetFramework>net9.0-windows</TargetFramework>
         <Platform>x64</Platform>
         <RootNamespace>PulseNetHotkeyService</RootNamespace>
         <AssemblyName>PulseNetHotkeyService</AssemblyName>
-        <!-- Hosts as a Windows Service via Microsoft.Extensions.Hosting.WindowsServices.
-             AddWindowsService auto-detects whether the exe was launched by the SCM
-             or from a console - same binary serves both, no separate dev/prod build.
-             Runs as SYSTEM when service-installed so its LL hook fires for game-IL
-             windows on Windows 11 26200+. -->
     </PropertyGroup>
 
     <ItemGroup>

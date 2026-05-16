@@ -4,6 +4,9 @@ obj/
 artifacts/
 installer/stage/
 installer/icon.ico
+installer/.wix/
+PulseNet-Setup.msi
+PulseNet-Setup.wixpdb
 
 # Visual Studio
 .vs/
