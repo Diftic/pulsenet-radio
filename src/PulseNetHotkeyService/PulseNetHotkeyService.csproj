@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net9.0-windows</TargetFramework>
+        <Platform>x64</Platform>
+        <RootNamespace>PulseNetHotkeyService</RootNamespace>
+        <AssemblyName>PulseNetHotkeyService</AssemblyName>
+        <!-- G1 ships as a standalone console exe so we can validate the LL hook +
+             named-pipe IPC manually before converting to a real Windows Service
+             in G3. Run as Administrator to clear the Windows 11 26200+ user-mode
+             hook policy when a game window has focus. -->
+    </PropertyGroup>
+
+</Project>
