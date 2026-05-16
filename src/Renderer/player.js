@@ -213,6 +213,12 @@
         onReady: function () {
           playerReady = true;
           postKeyForwardCapable();
+          // Audio comes from NativeAudioPlayer; the iframe is muted at the
+          // WebView2 layer. Pin the (silent) iframe to unmuted + max volume
+          // so any leaked control surface can't move it away from a known
+          // state. YT.Player can flip its UI into a "muted" presentation at
+          // volume=0 which would only confuse users.
+          try { player.unMute(); player.setVolume(100); } catch (_) {}
           if (onReadyCb) {
             onReadyCb();
           } else if (pendingVideoId) {
@@ -262,6 +268,7 @@
         onReady: function () {
           playerReady = true;
           postKeyForwardCapable();
+          try { player.unMute(); player.setVolume(100); } catch (_) {}
         },
         onStateChange: onPlayerStateChange,
         onError:       onPlayerError,

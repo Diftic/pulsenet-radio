@@ -95,12 +95,18 @@ html, body {
 }
 
 
-/* ---- Top-left click-blocker — 645×60 over YouTube's channel/title link ---- */
+/* ---- Top click-blocker. Full-width strip across the top of the video.
+   Originally 645x60 over YouTube's channel/title link only; widened to the
+   full 812 video-rect width because the audio-native architecture leaves the
+   iframe's own volume / settings / next-video controls visually present but
+   non-functional (audio comes from NativeAudioPlayer; the iframe is muted at
+   the WebView2 layer). Hiding the entire top control row prevents users from
+   poking at controls that no longer change anything. ---- */
 #click-blocker-tl {
   position: absolute;
   left: 0;
   top: 0;
-  width: 645px;
+  width: 812px;
   height: 60px;
   z-index: 3;
   background: transparent;

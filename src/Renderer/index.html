@@ -15,8 +15,13 @@
       <!-- Transparent barrier over the bottom 70px — swallows clicks so the
            user can't reach YouTube's "More videos" / "Share" overlay buttons. -->
       <div id="click-blocker" aria-hidden="true"></div>
-      <!-- Top-left barrier (645×60) — swallows clicks on YouTube's channel
-           avatar / title link in the upper-left of the player chrome. -->
+      <!-- Top barrier (full 812×60) — swallows clicks across the entire top
+           row of the iframe so YouTube's channel/title link AND the upper
+           volume / settings / next-video controls are unreachable. Those
+           controls are dead now: audio renders from NativeAudioPlayer, not
+           the (WebView2-muted) iframe, so users mustn't see knobs that
+           don't move anything. -->
+
       <div id="click-blocker-tl" aria-hidden="true"></div>
       <!-- Bottom-right barrier — covers the fullscreen-expand icon YouTube
            overlays at the bottom-right of embedded videos, just above the
