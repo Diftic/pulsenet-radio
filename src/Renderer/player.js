@@ -553,22 +553,6 @@
     versionBtn.textContent = versionLabel();
   };
 
-  // Phase A test button for Option 2 native audio. Posts a fixed test
-  // videoId; C# resolves and plays via NativeAudioPlayer. Verifies audio
-  // session attribution lands on PulseNet-Player.exe. Will be removed once
-  // Phase C wires real iframe-driven playback.
-  var phaseATestBtn = document.getElementById('phase-a-test-btn');
-  if (phaseATestBtn) {
-    phaseATestBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      try {
-        window.chrome.webview.postMessage(JSON.stringify({
-          type: 'nativeAudioTest',
-          videoId: 'dQw4w9WgXcQ'
-        }));
-      } catch (_) {}
-    });
-  }
 
   if (lockBtn) {
     lockBtn.addEventListener('click', function () {

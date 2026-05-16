@@ -499,17 +499,6 @@ public partial class OverlayWindow : Window
                     _ = HandleCheckForUpdatesAsync();
                     break;
 
-                // Phase A test trigger for Option 2 native audio. Plays a fixed
-                // VOD videoId through NativeAudioPlayer so the audio session is
-                // verifiable in Volume Mixer / Sonar as PulseNet-Player.exe. Will
-                // be removed once Phase C wires real iframe sync.
-                case "nativeAudioTest":
-                    var testVideoId = root.TryGetProperty("videoId", out var vid)
-                        ? (vid.GetString() ?? "dQw4w9WgXcQ")
-                        : "dQw4w9WgXcQ";
-                    _ = _nativeAudio.PlayVideoIdAsync(testVideoId);
-                    break;
-
                 // Phase C / D: drive NativeAudioPlayer from JS-side YT.Player state.
                 // YT.PlayerState values: -1 unstarted, 0 ended, 1 playing,
                 // 2 paused, 3 buffering, 5 cued. We act on 0 / 1 / 2 only;
