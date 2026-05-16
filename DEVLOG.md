@@ -29,6 +29,19 @@ This shifts the architectural plan. The remaining piece is producing the actual 
 
 Option 2 is the architecturally honest answer for the 18 VOD stations. Option 1 is enough for the live channel alone.
 
+### F8/F9-in-SC investigation: classic UIPI (CIG bumped launcher/game to admin)
+
+**Update 2026-05-17.** During v2.0.0 install verification the user noticed that CIG had silently bumped the RSI Launcher and Star Citizen installations to admin / High-IL via a recent update. This is now the primary hypothesis for everything observed below:
+
+- Same v1.8.2 binary working in the morning and failing after the reboot - CIG pushed the IL bump in between.
+- Elevation rescuing the hook - integrity levels matched.
+- Discord's PTT "Discord System Helper" wave - they were responding to bug reports from users hitting UIPI across newly-admin games, not to a new Microsoft policy.
+- Stable Win11 24H2/23H2 testers not seeing the problem - whoever hasn't taken the CIG update is still Medium-IL on the launcher.
+
+This is classic UIPI, documented since Vista: a Medium-IL process can't `WH_KEYBOARD_LL`-hook input destined for a High-IL foreground. No new Microsoft policy needed to explain anything. The Insider-build "26200 hook-IL tightening" hypothesis recorded below is demoted to "still plausible contributor but not load-bearing".
+
+Architecture unchanged. The elevated `PulseNetHotkeyService.exe` via Scheduled Task at logon handles UIPI exactly the same way it would handle any future Microsoft policy tightening - the helper runs at the same elevation as the protected foreground, so the hook is allowed to see the input.
+
 ### F8/F9-in-SC investigation: Windows hook-IL tightening (NOT user-machine-specific)
 What started today as a "F8 broken on Mallachi's machine" investigation ended as a v2.0 architecture finding affecting all users eventually. After ruling out app-specific bindings, Nvidia overlay (driver update + disable + reboot), Xbox Game Bar, Game Mode, Discord (wasn't even running during the failure tests), all user-mode NVIDIA background processes (NVIDIA Share / Overlay / NvContainer killed via Task Manager), and SteelSeries GG, the breakthrough came from a Discord notification: Discord's own push-to-talk had simultaneously broken on this machine, and Discord was prompting to install "Discord System Helper" to fix it.
 
