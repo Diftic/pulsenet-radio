@@ -3,7 +3,7 @@
 A living journal that persists across compactions. Captures decisions, progress, and context.
 
 ## Current State
-- **Focus:** v2.0.0 MSI installed and verified working end-to-end (G5 done). Click-blocker fix landed on top to hide the now-dead iframe volume/settings controls (audio comes from NativeAudioPlayer, iframe is muted at WebView2 layer). About to commit + push + cut a GitHub **pre-release** so the in-app UpdateChecker does not auto-push v2.0.0 to current v1.x users yet. Branch `feature/native-audio-option2` is shippable.
+- **Focus:** End of day 2026-05-17. **v2.0.0-pre1 is shipped** (https://github.com/Diftic/PulseNet-Player/releases/tag/v2.0.0-pre1) and awaiting tester feedback. Branch `feature/native-audio-option2` pushed to origin for the first time. License revision sits dirty in the working tree, intentionally not committed — will bundle with code changes from tester feedback. No active task list; full stop until feedback comes in.
 - **Architecture (current state):**
   - **Audio.** WebView2 muted on overlay + banner via `CoreWebView2.IsMuted = true`. `NativeAudioPlayer` (Windows.Media.Playback.MediaPlayer + YoutubeExplode 6.6.0) plays audio inline within PulseNet-Player.exe. `HandlePlayerStateChange` drives state=1/2/3/0 with immediate drift sync on resume; `HandlePlayerTimeUpdate` runs ongoing drift correction at 500 ms threshold / 3-second post-kickoff settle. Live routes via `PlayLiveAsync` (HLS) per `isLive` flag; drift correction skipped for live. URL-expiry recovery via MediaPlayer.MediaFailed re-resolves through YoutubeExplode (bounded 3 retries / 60s window). TFM is `net9.0-windows10.0.19041.0` for WinRT access.
   - **Hotkey.** `PulseNetHotkeyService.exe` (separate project, raw P/Invoke) runs elevated, hosts a named-pipe server at `\\.\pipe\PulseNetHotkey` with explicit ACL granting AuthenticatedUserSid ReadWrite. Player's `HotkeyClient` (IHostedService, background reconnect loop) connects, sends `setKeys`, receives `{type:"hotkey"}` push messages, raises `HotkeyPressed` event. Conflict-resolution: `App.xaml.cs` sets `GlobalHotkeyListener.Paused = HotkeyClient.IsConnected` to silence the local hook when the helper is driving. Post-subscription state-sync handles the host-startup race where ConnectionStateChanged fired before App attached the subscription.
@@ -15,6 +15,18 @@ A living journal that persists across compactions. Captures decisions, progress,
 - **Carry-over:** Drag-stick bug needs re-verification on this branch (was present on CefSharp builds, not yet re-tested). Real playlist IDs for 17 of 18 stations still not provided. Wave Link routing tester verification still pending. Console Ctrl+C doesn't shut down the player (`Console.CancelKeyPress` not wired in WPF) - cheap one-line fix for later.
 
 ## Log
+
+### 2026-05-17 03:30 - End of day: v2.0.0-pre1 shipped, license revision in flight, awaiting feedback
+- **Prerelease live.** v2.0.0-pre1 published with both MSI (396 MB) and portable exe (200 MB). Verified `isPrerelease=true`, `/releases/latest` still returns v1.8.2 so the in-app UpdateChecker is silent for existing v1.x users. Workflow tag-exclusion `!v*-*` blocked the CI trigger so no race window where the prerelease flag could have been flipped by softprops/action-gh-release.
+- **License revision in flight.** Added "Developed by Mallachi" credit + corrected copyright holder from "PulseNet Player" (product) to "Pulse Broadcasting Network" (org). First wording attempt was committed as `1f5d1e5` ("Developed by Mallachi, for PulseNet Broadcasting" with italic) and pushed. User then iterated to a simpler form ("Developed by Mallachi" plain, no italic, stacked directly above the copyright). The simpler version sits dirty in the working tree. Per user direction, not committing/pushing until tester feedback brings in adjacent code changes worth bundling.
+- **Today's commits on the branch** (all pushed):
+  - `6f945b6` feat(ui): block dead iframe top-bar + pin iframe volume to max
+  - `7054781` docs: G5 install validated + UIPI re-diagnosis (CIG launcher admin bump)
+  - `4e7a453` ci: skip prerelease tags (v*-*) so manual prereleases survive
+  - `584c79e` docs: capture v2.0.0-pre1 ship + workflow tag-exclusion outcome
+  - `1f5d1e5` docs(license): credit Mallachi/PulseNet Broadcasting + fix copyright holder
+- **Working-tree dirty file.** `installer/license.rtf` (simpler credit). Don't lose this on restart - if Claude opens fresh and sees a dirty working tree, the license edit is intentional and pending tester feedback, NOT something to commit.
+- **Path to stable.** When tester feedback is acted on and any final code changes land, the path to ship stable v2.0.0 to existing users is `git tag v2.0.0 && git push origin v2.0.0`. The workflow then auto-builds (no exclusion match because no dash in the tag), publishes a non-prerelease, and the UpdateChecker on v1.x machines picks it up via `/releases/latest`.
 
 ### 2026-05-17 02:30 - Completed: G5 install + click-blocker fix + UIPI re-diagnosis
 - **G5 done.** User rebooted, ran `scripts/build-msi.ps1`, installed v2.0.0 MSI. Player launches from Program Files, scheduled task `PulseNetHotkey` running, helper process up, F9 toggles in launcher / SC. Whole architecture shippable. State check at session start confirmed v2.0.0 registered, helper PID alive, task in Running state.

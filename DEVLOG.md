@@ -4,6 +4,66 @@
 
 ---
 
+## 2026-05-17 - v2.0.0-pre1 shipped; UIPI re-diagnosis; click-blocker fix
+
+End of an intense two-day arc. v2.0.0 is shippable, and the first prerelease is on GitHub for tester review.
+
+### G5 install round-trip
+After yesterday's late-evening pivot to a Scheduled Task helper + WiX per-machine MSI, the only remaining gate was a clean install round-trip. User rebooted (clearing a half-uninstalled v1 MSI whose lack of a teardown CustomAction had locked the helper's exe handle), ran `scripts/build-msi.ps1`, installed v2.0.0 MSI from Program Files. Helper auto-started as the `PulseNetHotkey` scheduled task at logon, player launches cleanly, F9 toggles overlay in RSI Launcher, in Star Citizen focus, and in-game on a live server with EAC. Whole arch validated end-to-end.
+
+### F8/F9-in-SC re-diagnosis: classic UIPI (not Windows policy)
+During the post-install verification the user noticed that **CIG had bumped the RSI Launcher and Star Citizen installs to admin / High-IL** via a recent update. This is now the primary explanation for the 2026-05-16 investigation chain, replacing the "Windows 11 26200+ user-mode LL hook policy tightening" hypothesis:
+
+- Same v1.8.2 binary working in the morning and failing after the reboot - CIG pushed the IL bump in between.
+- Elevation rescuing the hook - integrity levels matched.
+- Discord's "System Helper" wave - they were responding to UIPI-against-newly-admin-games reports, not to a Microsoft policy change.
+- Stable Win11 24H2/23H2 testers not seeing the problem - whoever hasn't taken the CIG update is still Medium-IL on the launcher.
+
+Classic UIPI from Vista, documented behavior. The Insider-build "26200 hook-IL tightening" hypothesis is demoted to "still plausible contributor but not load-bearing for explaining observations". Architecture unchanged - the elevated `PulseNetHotkeyService.exe` via Scheduled Task at logon handles UIPI exactly the same way it would handle any future Microsoft policy tightening.
+
+This is a better story for the project anyway: a documented Windows security model (UIPI) rather than speculative Insider-build behavior. CIG's IL bump is the trigger; our architecture is the right answer regardless of who else bumps their IL in the future.
+
+### Click-blocker fix for dead iframe controls
+With audio now coming from `NativeAudioPlayer` and the iframe muted at the WebView2 layer, the YT volume slider / settings cog / next-video button visible across the top of the iframe don't change anything. They were visually present but functionally dead. Two-pronged fix:
+
+- `#click-blocker-tl` widened from 645x60 to full 812x60 across the entire top row of the iframe so the upper YT chrome is unreachable.
+- `player.unMute(); player.setVolume(100)` pinned in both `onReady` callbacks (`createApiPlayer` + `loadLiveStream`) so even if a control surface leaked through, the silent iframe stays in a known-good unmuted/max state.
+
+Verified on a local Debug build before commit.
+
+### v2.0.0-pre1 prerelease published
+Tagged `v2.0.0-pre1`. The release lives at `https://github.com/Diftic/PulseNet-Player/releases/tag/v2.0.0-pre1` with both `PulseNet-Setup.msi` (396 MB) and `PulseNet-Player.exe` (200 MB) attached.
+
+Two things worth recording about how the prerelease was cut:
+
+- **Workflow tag exclusion.** `.github/workflows/build.yml` had `on: push: tags: ['v*']`. `gh release create v2.0.0-pre1 --prerelease` creates the tag via the GitHub API, and API-created tags trigger workflow tag-push triggers. The workflow's `softprops/action-gh-release@v2` defaults `prerelease: false` and would have re-uploaded over our release, flipping the flag. Added `- "!v*-*"` to the trigger so prerelease tags (anything with a dash suffix) are skipped. Stable tags still build normally.
+- **Manual local build.** Ran `scripts/build-msi.ps1 -Version 2.0.0` locally to produce the MSI. Used `gh release create v2.0.0-pre1 --prerelease --target feature/native-audio-option2 --title "..." --notes "..." PulseNet-Setup.msi PulseNet-Player.exe`. Verified after: `gh release view v2.0.0-pre1 --json isPrerelease` returns `true`; `gh api .../releases/latest` returns `v1.8.2`; `gh run list` shows no workflow run was triggered. All three checks green.
+
+In-app `UpdateChecker.cs:14` polls `/releases/latest` which the GitHub API filters to exclude prereleases - existing v1.x users see no new release and aren't prompted to update.
+
+### License revision in flight
+On the way out, started revising `installer/license.rtf`. Added a credit line for the developer/sponsor and corrected the copyright holder from "PulseNet Player" (the product name) to "Pulse Broadcasting Network" (the org per the 2026-04-17 rebrand). User iterated through two wordings:
+
+1. `Developed by Mallachi, for PulseNet Broadcasting` (italic) + corrected copyright. Committed as `1f5d1e5` and pushed.
+2. Simplified to plain `Developed by Mallachi` stacked directly above the copyright line, no italic.
+
+The simpler version sits dirty in the working tree; not committed yet. User wants to gather tester feedback first and bundle the license revision with whatever code updates come out of that round. Won't actually ship to any installer until the eventual stable v2.0.0 build (the existing v2.0.0-pre1 prerelease has the original pre-rebrand license and intentionally won't be re-cut).
+
+### Branch + commit state
+`feature/native-audio-option2` is now pushed to origin (first time - was local-only since 2026-04-30 per the migration-fallback rule). Today's commits:
+
+- `6f945b6` feat(ui): block dead iframe top-bar + pin iframe volume to max
+- `7054781` docs: G5 install validated + UIPI re-diagnosis (CIG launcher admin bump)
+- `4e7a453` ci: skip prerelease tags (v*-*) so manual prereleases survive
+- `584c79e` docs: capture v2.0.0-pre1 ship + workflow tag-exclusion outcome
+- `1f5d1e5` docs(license): credit Mallachi/PulseNet Broadcasting + fix copyright holder
+- `installer/license.rtf` (uncommitted): credit simplified to `Developed by Mallachi`
+
+### What's next
+Awaiting tester feedback on v2.0.0-pre1. The carry-over backlog (drag-stick re-verification, console Ctrl+C handler, idempotent setKeys in HotkeyClient, tray-toast fallback when helper is missing, crash-recovery SessionStart hook, real playlist IDs for 17 of 18 stations, Wave Link routing tester verification) waits for whatever the test cohort surfaces first. When ready to ship stable, the path is `git tag v2.0.0 && git push origin v2.0.0` - the workflow then auto-builds and publishes the non-prerelease that reaches existing v1.x users via the in-app UpdateChecker.
+
+---
+
 ## 2026-05-16 - Architecture exploration: CefSharp migration attempted and rolled back; WebView2-mute path discovered
 
 ### Driving problem (recap)
