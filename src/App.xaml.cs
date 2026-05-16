@@ -30,6 +30,7 @@ public partial class App : Application
         var settings = _host.Services.GetRequiredService<SettingsManager>();
         _listener    = _host.Services.GetRequiredService<GlobalHotkeyListener>();
         var listener      = _listener;
+        var hotkeyClient  = _host.Services.GetRequiredService<HotkeyClient>();
         var nativeAudio   = _host.Services.GetRequiredService<NativeAudioPlayer>();
         var overlayLogger = _host.Services.GetRequiredService<ILogger<OverlayWindow>>();
 
@@ -87,16 +88,22 @@ public partial class App : Application
 
 
         // First hotkey press closes the splash; subsequent presses just toggle.
+        // Both sources (local LL hook and elevated helper) need to be unsubscribed
+        // on first fire so the splash closes whichever path delivered the key.
         void OnFirstHotkey(object? s, EventArgs _)
         {
             Dispatcher.InvokeAsync(splash.Close);
-            listener.HotkeyPressed -= OnFirstHotkey;
+            listener.HotkeyPressed     -= OnFirstHotkey;
+            hotkeyClient.HotkeyPressed -= OnFirstHotkey;
         }
-        listener.HotkeyPressed += OnFirstHotkey;
+        listener.HotkeyPressed     += OnFirstHotkey;
+        hotkeyClient.HotkeyPressed += OnFirstHotkey;
 
         // Hotkey → tri-state cycle. Banner-visible → restore overlay. Overlay-visible →
         // hide overlay and (in Banner mode) raise the banner. Both hidden → show overlay.
-        listener.HotkeyPressed += (_, _) => Dispatcher.InvokeAsync(() =>
+        // Subscribed on both sources; HotkeyClient pauses the local listener while
+        // connected (below) so only one source dispatches at a time.
+        EventHandler triStateHotkey = (_, _) => Dispatcher.InvokeAsync(() =>
         {
             if (banner.IsBannerVisible)
             {
@@ -115,6 +122,21 @@ public partial class App : Application
                 overlay.Toggle();
             }
         });
+        listener.HotkeyPressed     += triStateHotkey;
+        hotkeyClient.HotkeyPressed += triStateHotkey;
+
+        // While the elevated helper is connected, silence the local LL hook so
+        // the same key press isn't dispatched twice. Local hook resumes as the
+        // best-effort fallback when the helper is offline (game-IL focus won't
+        // be covered then, but desktop / non-game windows still work).
+        // Sync once after subscribing to close the race where HotkeyClient
+        // connected during the host startup window, before the subscription
+        // was attached - otherwise we'd miss the initial state change.
+        hotkeyClient.ConnectionStateChanged += (_, connected) =>
+        {
+            listener.Paused = connected;
+        };
+        listener.Paused = hotkeyClient.IsConnected;
 
         overlay.BalloonTipRequested += (title, msg) => _trayIcon.ShowBalloon(title, msg);
         overlay.NowPlayingChanged   += t => Dispatcher.Invoke(() => banner.SetTitle(t));
@@ -167,6 +189,14 @@ public partial class App : Application
         // the Generic Host starts and stops them automatically.
         services.AddSingleton<GlobalHotkeyListener>();
         services.AddHostedService(p => p.GetRequiredService<GlobalHotkeyListener>());
+
+        // HotkeyClient: connects to the elevated PulseNetHotkeyService helper
+        // over a named pipe. When connected, GlobalHotkeyListener is paused so
+        // hotkey events come exclusively from the helper (which can fire even
+        // for game-IL focused windows on Windows 11 26200+). When the helper
+        // is offline, GlobalHotkeyListener resumes as a best-effort fallback.
+        services.AddSingleton<HotkeyClient>();
+        services.AddHostedService(p => p.GetRequiredService<HotkeyClient>());
 
         // NativeAudioPlayer: Option 2 architecture. WebView2 is muted; this plays
         // the actual audio via Windows.Media.Playback so the audio session is

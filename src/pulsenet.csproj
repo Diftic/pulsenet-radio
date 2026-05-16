@@ -39,6 +39,14 @@
     </ItemGroup>
 
     <ItemGroup>
+        <!-- PulseNetHotkeyService lives under src/ as a sibling project; the
+             default Compile glob would otherwise pull its Program.cs into the
+             player's compilation and double-compile the helper. -->
+        <Compile Remove="PulseNetHotkeyService\**\*.cs" />
+        <None Remove="PulseNetHotkeyService\**\*" />
+    </ItemGroup>
+
+    <ItemGroup>
         <AdditionalFiles Include="PInvoke\NativeMethods.txt" />
     </ItemGroup>
 
