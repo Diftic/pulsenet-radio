@@ -24,7 +24,7 @@ jobs:
         with:
           dotnet-version: "9.0.x"
 
-      - name: Publish
+      - name: Publish player
         shell: bash
         run: |
           dotnet publish src/pulsenet.csproj \
@@ -34,12 +34,24 @@ jobs:
             -p:PublishSingleFile=true \
             -p:IncludeNativeLibrariesForSelfExtract=true \
             -p:Version=${{ steps.version.outputs.VERSION }} \
-            -o artifacts
+            -o artifacts/player
+
+      - name: Publish hotkey helper
+        shell: bash
+        run: |
+          dotnet publish src/PulseNetHotkeyService/PulseNetHotkeyService.csproj \
+            -c Release \
+            -r win-x64 \
+            --self-contained true \
+            -p:PublishSingleFile=true \
+            -p:IncludeNativeLibrariesForSelfExtract=true \
+            -p:Version=${{ steps.version.outputs.VERSION }} \
+            -o artifacts/helper
 
       - name: Prepare portable exe
         shell: pwsh
         run: |
-          Copy-Item "artifacts\PulseNet-Player.exe" "PulseNet-Player.exe"
+          Copy-Item "artifacts\player\PulseNet-Player.exe" "PulseNet-Player.exe"
 
       - name: Install WiX Toolset
         run: dotnet tool install --global wix --version "5.*"
@@ -48,8 +60,11 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Path "installer\stage" -Force | Out-Null
-          Copy-Item "artifacts\*" "installer\stage\" -Recurse -Force
-          Copy-Item "src\Assets\icon.ico" "installer\"
+          Copy-Item "artifacts\player\*"                     "installer\stage\" -Recurse -Force
+          Copy-Item "artifacts\helper\PulseNetHotkeyService.exe" "installer\stage\" -Force
+          Copy-Item "scripts\install-task.ps1"               "installer\stage\" -Force
+          Copy-Item "scripts\uninstall-task.ps1"             "installer\stage\" -Force
+          Copy-Item "src\Assets\icon.ico"                    "installer\"
 
           cd installer
           wix extension add WixToolset.UI.wixext/5.0.2

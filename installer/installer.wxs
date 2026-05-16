@@ -8,7 +8,7 @@
     Manufacturer="PulseNet Player"
     UpgradeCode="AFAACCA7-3810-4953-B21F-0122FF8106DE"
     Language="1033"
-    Scope="perUser">
+    Scope="perMachine">
 
     <Icon Id="AppIcon.ico" SourceFile="icon.ico" />
     <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
@@ -24,13 +24,49 @@
       <ComponentRef Id="StartMenuShortcut" />
     </Feature>
 
+    <!-- Hotkey helper registration. The helper exe runs as a Scheduled Task
+         that fires at user logon with Highest privileges in the user's
+         interactive session. Cleared Windows 11 26200+ hook policy + bypasses
+         EAC process-tree analysis + works around the Session 0 isolation
+         that prevented a SYSTEM service from delivering hooks for user input.
+
+         install-task.ps1 / uninstall-task.ps1 ship inside the install folder
+         so the CAs can invoke them via [INSTALLFOLDER]. PowerShell.exe is
+         referenced by absolute path because the SYSTEM PATH during MSI
+         execution doesn't always include System32. -->
+    <CustomAction Id="InstallHotkeyTask"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand='"[%SystemRoot]\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "[INSTALLFOLDER]install-task.ps1" -BinPath "[INSTALLFOLDER]PulseNetHotkeyService.exe" -UserId "[LogonUser]"'
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <CustomAction Id="UninstallHotkeyTask"
+                  Directory="INSTALLFOLDER"
+                  ExeCommand='"[%SystemRoot]\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "[INSTALLFOLDER]uninstall-task.ps1"'
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <InstallExecuteSequence>
+      <!-- Tear down the task before files are removed so uninstall-task.ps1
+           can still see its own bits. Install the task after files land so
+           install-task.ps1 can find the helper exe at the install path. -->
+      <Custom Action="UninstallHotkeyTask" Before="RemoveFiles"
+              Condition="REMOVE=&quot;ALL&quot;" />
+      <Custom Action="InstallHotkeyTask"   After="InstallFiles"
+              Condition="NOT REMOVE" />
+    </InstallExecuteSequence>
+
   </Package>
 
   <Fragment>
-    <StandardDirectory Id="LocalAppDataFolder">
-      <Directory Id="ProgramsFolder" Name="Programs">
-        <Directory Id="INSTALLFOLDER" Name="PulseNet Player" />
-      </Directory>
+    <!-- Per-machine MSI now installs to Program Files instead of LocalAppData
+         so the helper exe is reachable from any user account on the machine
+         (the scheduled task lives per-user, but the binary it points at is
+         machine-wide). -->
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="PulseNet Player" />
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder">
       <Directory Id="AppMenuFolder" Name="PulseNet Player" />
@@ -54,7 +90,7 @@
         Icon="AppIcon.ico" />
       <RemoveFolder Id="RemoveAppMenuFolder" Directory="AppMenuFolder" On="uninstall" />
       <RegistryValue
-        Root="HKCU"
+        Root="HKLM"
         Key="Software\PulseNet Player"
         Name="installed"
         Type="integer"
