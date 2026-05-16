@@ -45,6 +45,39 @@ Implications for v2.0:
 
 Decision: v2.0 will include both Option 2 audio AND a Windows Service hotkey helper (path B). Service approach matches Discord's choice for the identical problem. Install complexity is acceptable since PulseNet already ships a WiX MSI that handles elevated install steps.
 
+### Implementation: Option 2 native-audio half landed (Phases A-E + AudioBridge rip)
+
+After the diagnostic chain settled, the Option 2 architecture was built on `feature/native-audio-option2` in five phases plus a major simplification.
+
+**Phase A - NativeAudioPlayer skeleton.** New `src/Services/NativeAudioPlayer.cs` wraps `Windows.Media.Playback.MediaPlayer` with VOD (`PlayVideoIdAsync` via YoutubeExplode progressive audio-only stream) and live (`PlayLiveAsync` via HLS manifest) entry points. TFM bumped to `net9.0-windows10.0.19041.0` for direct WinRT access to `Windows.Media.Playback` / `Windows.Media.Core`. YoutubeExplode 6.6.0 added to Directory.Packages.props. Smoke-tested with a temporary settings-panel button that triggered playback of a fixed videoId; confirmed audio session attributes to PulseNet-Player.exe in Volume Mixer.
+
+**Phase B - JS event forwarding.** Extended `player.js`'s `onPlayerStateChange` and 2-second time-poll to post `playerStateChange` and `playerTimeUpdate` WebMessages with state, videoId, currentTime, and isLive flag. Host added log-only handlers in `OverlayWindow.OnWebMessageReceived`. Smoke-tested by wiring Solaris Classical (r4) to videoId `dQw4w9WgXcQ` as an obvious Easter egg until the broadcaster spins the station up; state transitions flowed correctly through play / pause / seek / natural rebuffers.
+
+**Phase C - Host-side sync orchestration.** Replaced log-only handlers with real action. `HandlePlayerStateChange` drives `NativeAudioPlayer`: state=1 with new videoId triggers `PlayVideoIdAsync`; state=1 with same videoId triggers `Resume`; state=2 triggers `Pause`; state=0 triggers `Stop`. `HandlePlayerTimeUpdate` runs drift correction (500 ms threshold, 3-second post-kickoff settle to let YoutubeExplode resolve and MediaPlayer buffer). Tracks `_activeNativeVideoId` + `_nativePlayKickoff`. Smoke-tested end-to-end on Solaris Classical: muted iframe video + audible native audio attributed to PulseNet-Player.exe, play / pause / seek sync correctly.
+
+**Phase D - PulseNet LIVE.** Added `isLive` flag to JS state messages (mirrors `liveStreamActive`). Host routes the new-play branch to `PlayLiveAsync` (HLS) instead of `PlayVideoIdAsync` (progressive) when isLive is true. Drift correction skipped for live (no meaningful position sync between independent live-edge consumers). Smoke-tested: LIVE plays cleanly, audio attributed to PulseNet-Player.exe. The existing YT.Player wrapper around the live_stream iframe already surfaced `getVideoData().video_id` correctly; no server-side scrape fallback needed.
+
+**Phase E folded into AudioBridge rip.** Original Phase E was supposed to repoint `AudioBridge`'s process-loopback target from `msedgewebview2.exe` to our own pid. But Mallachi noticed two things during the smoke test: (a) OBS Window Capture's "Capture Audio (BETA)" now picked up audio directly from PulseNet-Player.exe, since `NativeAudioPlayer` plays inline within our process; (b) two PulseNet-Player.exe sessions appeared in Sonar - one for the native MediaPlayer render, one for `AudioBridge`'s process-loopback capture client. The single-source OBS capture made the entire `LocalAudioStreamServer` + `AudioBridge` chain redundant. Deleted:
+
+- `src/Services/AudioBridge.cs` (process-loopback re-emit pump)
+- `src/Services/LocalAudioStreamServer.cs` (localhost WAV server, port 17329)
+- `src/PInvoke/AudioBridgeInterop.cs` (WASAPI process-loopback interop)
+- `src/PInvoke/AudioSessionInterop.cs` (only kept around for AudioBridge after the v1.4.2 trim)
+- Streamer Info panel rewritten from two-section (Window Capture + Media Source) to single-section (Window Capture with "Capture Audio (BETA)" ticked)
+- Phase A test button removed (real stations exercise the same code path now)
+
+Net delta in the rip commit: 1254 lines removed, 13 added. The architecture is now: muted WebView2 for video, native MediaPlayer for audio (slaved to YT IFrame API events), one Sonar session, one OBS source.
+
+### Where it leaves us
+
+Option 2 is materially complete. Branch `feature/native-audio-option2` is 10 commits ahead of master, never pushed. Remaining before merge:
+
+- **Phase F - URL expiration recovery.** YouTube audio URLs expire ~6 hours after resolution. Listen for `MediaFailed` on the MediaPlayer, re-resolve via YoutubeExplode, resume from last known position. Needed for long listening sessions.
+- **Windows Service helper for hotkey delivery.** Separate workstream, still required for the v2.0 release because Windows 11 26200+ user-mode LL hook policy will eventually reach all testers.
+- **Real playlist IDs** for the other 17 stations as they go live on the upstream YouTube channel (rolling launch from 2026-05-16+).
+
+Tester impact is gated by the Windows hook-IL question, not this work. The audio architecture validates, the OBS workflow simplifies to one source, and testers will see one clean audio session whenever the build is shipped.
+
 ---
 
 ## 2026-05-13 - v1.8.2 - LocalAudioStreamServer ring buffer fixes producer wedge
