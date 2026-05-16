@@ -35,6 +35,18 @@ public sealed class NativeAudioPlayer : IDisposable
     private readonly MediaPlayer _player;
     private readonly SemaphoreSlim _lock = new(1, 1);
     private string? _currentVideoId;
+    private bool _isCurrentlyLive;
+
+    // Phase F retry state. YouTube audio URLs expire ~6 hours after resolution;
+    // on long listening sessions the buffer drains past the expiry and the
+    // MediaPlayer fires MediaFailed with a NetworkError. Re-resolving via
+    // YoutubeExplode and letting AutoPlay restart the stream recovers cleanly.
+    // Host-side drift correction realigns position on the next time-update
+    // tick (~2s) so no manual seek is needed in the recovery path.
+    private const int MaxRetries = 3;
+    private static readonly TimeSpan RetryWindow = TimeSpan.FromSeconds(60);
+    private DateTime _firstFailureInWindow = DateTime.MinValue;
+    private int _retryCount;
 
     public NativeAudioPlayer(ILogger<NativeAudioPlayer> logger)
     {
@@ -45,14 +57,63 @@ public sealed class NativeAudioPlayer : IDisposable
             AutoPlay = true,
             Volume   = 1.0,
         };
-        _player.MediaFailed += (_, e) =>
-            _logger.LogWarning("NativeAudioPlayer MediaFailed: {Msg} (Error={Err})",
-                e.ErrorMessage, e.Error);
+        _player.MediaFailed += OnMediaFailed;
         _player.MediaOpened += (_, _) =>
             _logger.LogInformation("NativeAudioPlayer MediaOpened ({VideoId}, dur={Dur})",
                 _currentVideoId, _player.PlaybackSession.NaturalDuration);
         _player.MediaEnded += (_, _) =>
             _logger.LogInformation("NativeAudioPlayer MediaEnded ({VideoId})", _currentVideoId);
+    }
+
+    private async void OnMediaFailed(MediaPlayer _, MediaPlayerFailedEventArgs e)
+    {
+        _logger.LogWarning("NativeAudioPlayer MediaFailed: {Msg} (Error={Err})",
+            e.ErrorMessage, e.Error);
+        await HandleMediaFailureAsync(e);
+    }
+
+    private async Task HandleMediaFailureAsync(MediaPlayerFailedEventArgs e)
+    {
+        var videoId = _currentVideoId;
+        if (string.IsNullOrEmpty(videoId))
+        {
+            // No active playback - failure on a torn-down source, nothing to recover.
+            return;
+        }
+
+        // Non-transient errors: codec missing, malformed manifest, region-blocked
+        // content. Re-resolving won't help; surfacing the failure once is enough.
+        if (e.Error == MediaPlayerError.DecodingError ||
+            e.Error == MediaPlayerError.SourceNotSupported)
+        {
+            _logger.LogWarning("NativeAudioPlayer: non-transient error, not retrying ({Err})", e.Error);
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        if (now - _firstFailureInWindow > RetryWindow)
+        {
+            _firstFailureInWindow = now;
+            _retryCount = 0;
+        }
+        _retryCount++;
+
+        if (_retryCount > MaxRetries)
+        {
+            _logger.LogError(
+                "NativeAudioPlayer: {N} failures within {Win}s for {VideoId}, giving up",
+                _retryCount, RetryWindow.TotalSeconds, videoId);
+            return;
+        }
+
+        _logger.LogInformation(
+            "NativeAudioPlayer: recovery attempt {N}/{Max} for {VideoId} (likely URL expired)",
+            _retryCount, MaxRetries, videoId);
+
+        if (_isCurrentlyLive)
+            await PlayLiveAsync(videoId).ConfigureAwait(false);
+        else
+            await PlayVideoIdAsync(videoId).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -93,6 +154,7 @@ public sealed class NativeAudioPlayer : IDisposable
             }
 
             _currentVideoId = videoId;
+            _isCurrentlyLive = false;
             _player.Pause();
             _player.Source = MediaSource.CreateFromUri(new Uri(audioUrl));
         }
@@ -127,6 +189,7 @@ public sealed class NativeAudioPlayer : IDisposable
             }
 
             _currentVideoId = videoId;
+            _isCurrentlyLive = true;
             _player.Pause();
             _player.Source = MediaSource.CreateFromUri(new Uri(hlsUrl));
         }
@@ -155,6 +218,9 @@ public sealed class NativeAudioPlayer : IDisposable
             _player.Pause();
             _player.Source = null;
             _currentVideoId = null;
+            _isCurrentlyLive = false;
+            _retryCount = 0;
+            _firstFailureInWindow = DateTime.MinValue;
             _logger.LogInformation("NativeAudioPlayer.Stop");
         }
         catch (Exception ex)
