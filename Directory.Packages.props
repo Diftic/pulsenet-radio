@@ -8,5 +8,6 @@
         <PackageVersion Include="Microsoft.Extensions.Hosting" Version="9.0.3" />
         <PackageVersion Include="Microsoft.Extensions.Logging" Version="9.0.3" />
         <PackageVersion Include="Microsoft.Extensions.Logging.Console" Version="9.0.3" />
+        <PackageVersion Include="YoutubeExplode" Version="6.6.0" />
     </ItemGroup>
 </Project>

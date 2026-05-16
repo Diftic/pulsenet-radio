@@ -19,6 +19,7 @@ public partial class OverlayWindow : Window
 {
     private readonly SettingsManager _settings;
     private readonly GlobalHotkeyListener _hotkeyListener;
+    private readonly NativeAudioPlayer _nativeAudio;
     private readonly ILogger<OverlayWindow> _logger;
 
     private HWND _hwnd;
@@ -82,10 +83,12 @@ public partial class OverlayWindow : Window
     public OverlayWindow(
         SettingsManager settings,
         GlobalHotkeyListener hotkeyListener,
+        NativeAudioPlayer nativeAudio,
         ILogger<OverlayWindow> logger)
     {
         _settings = settings;
         _hotkeyListener = hotkeyListener;
+        _nativeAudio = nativeAudio;
         _logger = logger;
 
         InitializeComponent();
@@ -485,6 +488,17 @@ public partial class OverlayWindow : Window
 
                 case "checkForUpdates":
                     _ = HandleCheckForUpdatesAsync();
+                    break;
+
+                // Phase A test trigger for Option 2 native audio. Plays a fixed
+                // VOD videoId through NativeAudioPlayer so the audio session is
+                // verifiable in Volume Mixer / Sonar as PulseNet-Player.exe. Will
+                // be removed once Phase C wires real iframe sync.
+                case "nativeAudioTest":
+                    var testVideoId = root.TryGetProperty("videoId", out var vid)
+                        ? (vid.GetString() ?? "dQw4w9WgXcQ")
+                        : "dQw4w9WgXcQ";
+                    _ = _nativeAudio.PlayVideoIdAsync(testVideoId);
                     break;
             }
         }

@@ -30,12 +30,13 @@ public partial class App : Application
         var settings = _host.Services.GetRequiredService<SettingsManager>();
         _listener    = _host.Services.GetRequiredService<GlobalHotkeyListener>();
         var listener      = _listener;
+        var nativeAudio   = _host.Services.GetRequiredService<NativeAudioPlayer>();
         var overlayLogger = _host.Services.GetRequiredService<ILogger<OverlayWindow>>();
 
         // OverlayWindow must be created on the STA (UI) thread.
         // Pre-size to the fixed frame canvas. Position off-screen so the WebView2
         // HwndHost initialises invisibly, then snap to centre on first show.
-        _overlay = new OverlayWindow(settings, listener, overlayLogger);
+        _overlay = new OverlayWindow(settings, listener, nativeAudio, overlayLogger);
         var overlay = _overlay;
         overlay.Width  = Constants.FrameDisplayWidth;
         overlay.Height = Constants.FrameDisplayHeight;
@@ -178,5 +179,11 @@ public partial class App : Application
         // re-emits it from PulseNet-Player.exe so OBS Window Capture's
         // Capture Audio (BETA) sees PulseNet as an audio-producing process.
         services.AddHostedService<AudioBridge>();
+
+        // NativeAudioPlayer: Option 2 architecture. WebView2 is muted; this plays
+        // the actual audio via Windows.Media.Playback so the audio session is
+        // attributed to PulseNet-Player.exe instead of msedgewebview2.exe. Not a
+        // hosted service: lifecycle driven by overlay-side play/pause/stop calls.
+        services.AddSingleton<NativeAudioPlayer>();
     }
 }
