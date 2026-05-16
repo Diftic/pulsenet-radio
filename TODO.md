@@ -1,6 +1,17 @@
-# PulseNet Player — TODO
+# PulseNet Player - TODO
 
 ---
+
+## Active direction (2026-05-16+): WebView2 + audio mute + native audio half + service helper
+
+After the CefSharp migration was rolled back (see DEVLOG 2026-05-16 entry, archive branch `archive/cefsharp-migration-attempt`), the active architecture is v1.8.2 codebase plus `CoreWebView2.IsMuted = true` on both browser windows. F8-in-SC root cause identified as Windows 11 user-mode hook policy tightening (not user-machine-specific), so v2.0 also commits to a Windows Service helper. Status:
+
+- [x] **WebView2 mute experiment validated.** `IsMuted = true` on OverlayWindow + MiniBannerWindow. Video renders normally, zero `msedgewebview2.exe` audio session in Sonar, F8/F9 still work on machines whose Windows has not yet tightened the LL hook policy. One-line change replaces the entire CefSharp migration.
+- [x] **F8-in-SC root cause identified.** NOT user-machine-specific. Windows 11 build 26200+ user-mode LL hook policy change: hook callbacks silently skipped when the foreground window is at higher integrity level / game-classified / "protected". Confirmed by elevation test (F9 works in RSI Launcher when player is elevated; PyCharm focus works at any IL). Discord hit the same wall (PTT broken, prompting "Discord System Helper" install). Stable Win11 24H2 / 23H2 testers don't have the restriction yet, will when their update lands.
+- [ ] **Native audio half (Option 2 chosen).** Native player slaved to YT IFrame API events from the muted WebView2. Wrap iframe with `YT.Player`, subscribe to `onStateChange` / `onPlaybackRateChange` / track-change, mirror play / pause / seek / track-change on the native player (extends archived `LiveStreamPlayer.cs`). Refactor `AudioBridge` to capture from the native player's session instead of `msedgewebview2.exe` so OBS Media Source keeps working. Detailed scope to follow in DEVLOG.
+- [ ] **Windows Service helper for hotkey delivery (v2.0).** SYSTEM-level service installs `WH_KEYBOARD_LL` and IPCs the keystroke to the user-mode player. Mirrors Discord's "Discord System Helper" approach for the identical problem. Service install requires elevation; MSI installer already handles that step. Required so hotkey-during-game keeps working once testers' Windows catches up to the policy change. Detailed scope to follow.
+- [ ] **Drag-stick bug** (carry-over): when SC has focus and user clicks the player overlay, overlay follows cursor until next click. Reproduced on CefSharp builds; not yet re-verified on v1.8.2 baseline. Test on current build; if exists, fix in OverlayWindow's mouse-hook drag pipeline (likely needs auto-release-on-focus-loss or watchdog timeout when LBUTTONUP doesn't arrive).
+- [ ] **Console Ctrl+C shutdown** (cheap fix): WPF + Generic Host setup doesn't wire `Console.CancelKeyPress`, so Ctrl+C in the launching terminal is silently ignored. One-line handler in `App.OnStartup` to call `Application.Current.Shutdown()`. Not urgent (Task Manager / `Stop-Process` work fine), but worth doing while we're touching the host code anyway.
 
 ## Done ✓
 

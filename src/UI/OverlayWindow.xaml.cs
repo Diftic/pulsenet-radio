@@ -948,6 +948,10 @@ public partial class OverlayWindow : Window
                 userDataFolder: cacheFolder,
                 options: envOptions);
             await WebView.EnsureCoreWebView2Async(_env);
+            // EXPERIMENT: mute WebView2's audio so msedgewebview2.exe produces no
+            // audio session. Video keeps rendering. Audio will be produced by a
+            // native player attributed to PulseNet-Player.exe (next step).
+            WebView.CoreWebView2.IsMuted = true;
             WebView.CoreWebView2.Settings.IsStatusBarEnabled = false;
             WebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             WebView.CoreWebView2.Settings.AreDefaultScriptDialogsEnabled = false;

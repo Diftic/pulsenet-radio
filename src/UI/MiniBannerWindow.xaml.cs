@@ -205,6 +205,9 @@ public partial class MiniBannerWindow : Window
             _env = await CoreWebView2Environment.CreateAsync(userDataFolder: cacheFolder);
             await WebView.EnsureCoreWebView2Async(_env);
 
+            // EXPERIMENT: mute the banner WebView2 too. Banner has no audio source
+            // today but mute for consistency with overlay's audio-attribution path.
+            WebView.CoreWebView2.IsMuted = true;
             WebView.CoreWebView2.Settings.IsStatusBarEnabled            = false;
             WebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
             WebView.CoreWebView2.Settings.AreDefaultScriptDialogsEnabled = false;

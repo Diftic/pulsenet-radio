@@ -1,6 +1,49 @@
-# PulseNet Player — Dev Log
+# PulseNet Player - Dev Log
 
-> Entertainment Division of The Exelus Corporation — "The 'Verse always has a soundtrack."
+> Entertainment Division of The Exelus Corporation. "The 'Verse always has a soundtrack."
+
+---
+
+## 2026-05-16 - Architecture exploration: CefSharp migration attempted and rolled back; WebView2-mute path discovered
+
+### Driving problem (recap)
+SteelSeries Sonar / Voicemeeter / Wave Link show audio sessions by exe name. Our WebView2 architecture made audio come from `msedgewebview2.exe` (Microsoft's WebView2 browser process), so per-app mixer routing lists it under that name instead of `PulseNet-Player.exe`. v1.8.0's `LocalAudioStreamServer` solved the OBS-streaming use case (a separate localhost WAV endpoint, listeners pull via Media Source) but the local-mixer-routing problem remained.
+
+### Attempt 1 (rolled back): full migration to CefSharp
+The hypothesis was that CefSharp + `--disable-features=AudioServiceOutOfProcess` would collapse Chromium's audio service into the host process, landing audio attribution on `PulseNet-Player.exe`. Empirically verified in a spike (`tools/cefsharp-spike/`) and then implemented in the real codebase across five chunks (A. CEF bootstrap + JS shim, B. MiniBannerWindow migration, C. OverlayWindow migration, D. native HLS for PulseNet LIVE via YoutubeExplode + Windows.Media.Playback, E. AudioBridge cleanup). Build clean, audio attribution achieved.
+
+### Why rolled back
+The migration introduced an F8-in-Star-Citizen regression on at least one user's machine. Empirical isolation test on 2026-05-16: with all four user-mode hotkey paths active (LL hook + RegisterHotKey + GetAsyncKeyState polling + RawInput RIDEV_INPUTSINK), F8 in SC focus did not reach us. With only the LL hook active (matching v1.8.2's design exactly), same result. The earlier v1.8.2 build (WebView2 era) DID work in SC for the same user. Suspect cause: EAC's process-tree analysis trusts Microsoft-signed `msedgewebview2.exe` (system runtime) but distrusts unsigned third-party `CefSharp.BrowserSubprocess.exe` bundled with our app. Self-signing experiment (4 binaries signed with a self-signed cert installed in LocalMachine Trusted Root, all reported Valid) did not fix it. EAC likely requires a public-CA chain or has additional process-tree checks.
+
+The trade-off the migration was making: solve the niche local-mixer-attribution convenience at the cost of breaking F8 in SC, which is THE primary in-game use of the player. Wrong-direction work, however clean the implementation came out. Full migration snapshot archived to local branch `archive/cefsharp-migration-attempt` (commit `c160f3a`). Master hard-reset to `d8bfb33` (v1.8.2).
+
+Salvageable from the archive: `src/Services/LiveStreamPlayer.cs` (native HLS via YoutubeExplode + Windows.Media.Playback), `src/Renderer/chrome-webview-shim.js` (JS shim pattern for engine-swap scenarios), `scripts/sign-test.ps1` (cheap signing diagnostic harness usable in any future anti-cheat compatibility test), and the empirical findings captured in the archive branch's session journal.
+
+### Attempt 2 (validated): WebView2 with audio muted
+After the rollback, tested a much smaller hypothesis: set `CoreWebView2.IsMuted = true` on the OverlayWindow's WebView2 (and the banner's, for consistency). Result: video renders normally, no audio session for `msedgewebview2.exe` appears in Sonar, F8 in SC works exactly as v1.8.2 did before. One-line change accomplishes the audio-source isolation that the entire migration was trying to achieve, with no engine swap, no untrusted subprocess, no F8 regression.
+
+This shifts the architectural plan. The remaining piece is producing the actual audio from `PulseNet-Player.exe` and keeping it synchronized with the muted WebView2 video. Two designs to evaluate:
+
+- **Option 1 - Independent native audio player.** WebView2 muted, separate native player (extending the archived `LiveStreamPlayer` pattern) plays the same videoId's audio independently. Works for live broadcasts (no pause). Breaks for VOD because user pause/seek inside the YT iframe doesn't propagate to the native audio.
+- **Option 2 - Slaved native audio via YT IFrame API.** WebView2 muted, native audio plays, but subscribes to the iframe's `onStateChange` / `onPlaybackRateChange` / track-change events via a `YT.Player` wrapper + postMessage to the host, then mirrors play / pause / seek / track-change on the native player. UX-correct but with sync challenges (50-200ms event-to-action lag, drift on long playback, track-change requires resolving a new YoutubeExplode URL mid-playback).
+
+Option 2 is the architecturally honest answer for the 18 VOD stations. Option 1 is enough for the live channel alone.
+
+### F8/F9-in-SC investigation: Windows hook-IL tightening (NOT user-machine-specific)
+What started today as a "F8 broken on Mallachi's machine" investigation ended as a v2.0 architecture finding affecting all users eventually. After ruling out app-specific bindings, Nvidia overlay (driver update + disable + reboot), Xbox Game Bar, Game Mode, Discord (wasn't even running during the failure tests), all user-mode NVIDIA background processes (NVIDIA Share / Overlay / NvContainer killed via Task Manager), and SteelSeries GG, the breakthrough came from a Discord notification: Discord's own push-to-talk had simultaneously broken on this machine, and Discord was prompting to install "Discord System Helper" to fix it.
+
+Hypothesis: Windows 11 (Insider build 26200.8457, post-24H2 Germanium era) has tightened user-mode `WH_KEYBOARD_LL` policy so the hook callback is silently skipped when the foreground window is at higher integrity level / game-classified / "protected" status. Same restriction Discord just hit. Confirmed in 30 seconds: relaunched PulseNet-Player.exe from an elevated PowerShell. F9 in RSI Launcher worked. From non-elevated, same code path produces zero LL-hook callbacks for launcher-focus or SC-focus, while PyCharm-focus continues to work fine. Pattern matches: medium-IL processes still receive hook callbacks; game-IL / protected windows don't.
+
+This rewrites today's narrative entirely. The original "CefSharp's unsigned subprocess broke EAC trust" hypothesis is dead. EAC isn't loaded when the launcher has focus, and Discord's PTT (which has nothing to do with our hook code) is hitting the same wall on the same machine. The CefSharp migration was wrong-direction work for a wrong reason; the actual problem is a Windows policy change, not an anti-cheat trust issue.
+
+Side puzzle: during today's CefSharp tests Mallachi tried running the player elevated and the hotkey still didn't fire. After the rollback, elevated WebView2-mute does fire. Working hypothesis (Mallachi's): Windows extends the restriction to non-Microsoft-recognized hosting runtimes (WebView2 is Microsoft-signed and on the trusted-runtime list; CefSharp's `BrowserSubprocess.exe` is third-party and not). Not worth chasing further: CefSharp is archived.
+
+Implications for v2.0:
+- Tester machines on stable Win11 24H2 / 23H2 don't have the restriction yet but will when their update lands. The current beta works for them today only because Windows hasn't caught up.
+- PulseNet's UX value rests on hotkey-during-game (summon overlay while in SC). Once Windows tightens for all users, we lose that without an architectural change.
+- Three production options: (A) UAC-elevated launch with scheduled-task auto-elevation trick, (B) SYSTEM-level Windows Service helper that installs the LL hook + IPCs the keystroke to the user-mode player (Discord's approach), (C) hybrid where the service is an optional install.
+
+Decision: v2.0 will include both Option 2 audio AND a Windows Service hotkey helper (path B). Service approach matches Discord's choice for the identical problem. Install complexity is acceptable since PulseNet already ships a WiX MSI that handles elevated install steps.
 
 ---
 
