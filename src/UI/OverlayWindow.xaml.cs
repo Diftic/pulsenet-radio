@@ -22,6 +22,15 @@ public partial class OverlayWindow : Window
     private readonly NativeAudioPlayer _nativeAudio;
     private readonly ILogger<OverlayWindow> _logger;
 
+    // Phase C iframe-to-native sync state. _activeNativeVideoId tracks what the
+    // native player has been told to play; differing videoId on state=1 means
+    // station / track change and triggers a fresh PlayVideoIdAsync. Same videoId
+    // means resume. _nativePlayKickoff is the start of the most recent
+    // PlayVideoIdAsync; drift correction is suppressed until ~3s after kickoff
+    // to let YoutubeExplode resolve + MediaPlayer buffer without churn.
+    private string? _activeNativeVideoId;
+    private DateTime _nativePlayKickoff = DateTime.MinValue;
+
     private HWND _hwnd;
     private HWND _chromeHwnd;  // cached WebView2 Chrome child HWND for scroll forwarding
     private HWND _prevFgHwnd;  // foreground window captured just before we steal it
@@ -501,27 +510,98 @@ public partial class OverlayWindow : Window
                     _ = _nativeAudio.PlayVideoIdAsync(testVideoId);
                     break;
 
-                // Phase B event forwarding from the JS-side YT.Player. State and
-                // time messages are logged here so we can validate the event flow
-                // before Phase C wires them to NativeAudioPlayer for real sync.
+                // Phase C: drive NativeAudioPlayer from JS-side YT.Player state.
+                // YT.PlayerState values: -1 unstarted, 0 ended, 1 playing,
+                // 2 paused, 3 buffering, 5 cued. We act on 0 / 1 / 2 only;
+                // -1, 3, 5 are transient and resolved by a subsequent state=1.
                 case "playerStateChange":
                     var psState   = root.GetProperty("state").GetInt32();
                     var psVideoId = root.TryGetProperty("videoId",     out var psv) ? psv.GetString() : null;
                     var psTime    = root.TryGetProperty("currentTime", out var pst) ? pst.GetDouble() : 0;
                     _logger.LogDebug("playerStateChange state={State} videoId={VideoId} time={Time:F2}",
                         psState, psVideoId, psTime);
+                    HandlePlayerStateChange(psState, psVideoId, psTime);
                     break;
 
+                // Drift correction. Triggered every ~2s while iframe is playing.
+                // Compares iframe's currentTime to native player's position; if
+                // they diverge past 500ms (and we're past the post-kickoff
+                // settle window), seeks the native player to match the iframe.
                 case "playerTimeUpdate":
                     var ptVideoId = root.TryGetProperty("videoId",     out var ptv) ? ptv.GetString() : null;
                     var ptTime    = root.TryGetProperty("currentTime", out var ptt) ? ptt.GetDouble() : 0;
-                    _logger.LogTrace("playerTimeUpdate videoId={VideoId} time={Time:F2}", ptVideoId, ptTime);
+                    HandlePlayerTimeUpdate(ptVideoId, ptTime);
                     break;
             }
         }
         catch (Exception ex)
         {
             _logger.LogDebug("Unhandled web message: {Ex}", ex.Message);
+        }
+    }
+
+    // -------------------------------------------------------------------------
+    // Phase C iframe-to-native sync
+    // -------------------------------------------------------------------------
+
+    private void HandlePlayerStateChange(int state, string? videoId, double iframeTime)
+    {
+        switch (state)
+        {
+            case 1: // PLAYING
+                if (string.IsNullOrEmpty(videoId)) return;
+                if (!string.Equals(_activeNativeVideoId, videoId, StringComparison.Ordinal))
+                {
+                    // Station or track change — new play.
+                    _activeNativeVideoId = videoId;
+                    _nativePlayKickoff   = DateTime.UtcNow;
+                    _logger.LogInformation("Native audio: starting playback for {VideoId}", videoId);
+                    _ = _nativeAudio.PlayVideoIdAsync(videoId);
+                }
+                else
+                {
+                    // Same videoId, was paused — resume.
+                    _logger.LogDebug("Native audio: resuming {VideoId}", videoId);
+                    _nativeAudio.Resume();
+                }
+                break;
+
+            case 2: // PAUSED
+                _logger.LogDebug("Native audio: pausing");
+                _nativeAudio.Pause();
+                break;
+
+            case 0: // ENDED
+                _logger.LogDebug("Native audio: stopping (iframe ended)");
+                _nativeAudio.Stop();
+                _activeNativeVideoId = null;
+                break;
+
+            // -1 UNSTARTED, 3 BUFFERING, 5 CUED: transient; wait for next state.
+        }
+    }
+
+    // 500ms drift tolerance. Below that we leave the player alone; above we
+    // seek to the iframe's position. 3-second settle window after kickoff
+    // suppresses corrections while the native player is still resolving the
+    // YoutubeExplode URL and MediaPlayer is buffering the first chunk.
+    private static readonly TimeSpan NativeDriftThreshold = TimeSpan.FromMilliseconds(500);
+    private static readonly TimeSpan NativeKickoffSettle  = TimeSpan.FromSeconds(3);
+
+    private void HandlePlayerTimeUpdate(string? videoId, double iframeTime)
+    {
+        if (string.IsNullOrEmpty(videoId)) return;
+        if (!string.Equals(_activeNativeVideoId, videoId, StringComparison.Ordinal)) return;
+        if (DateTime.UtcNow - _nativePlayKickoff < NativeKickoffSettle) return;
+
+        var nativePos = _nativeAudio.Position.TotalSeconds;
+        if (nativePos <= 0) return; // not yet playing
+        var drift = Math.Abs(iframeTime - nativePos);
+        if (drift > NativeDriftThreshold.TotalSeconds)
+        {
+            _logger.LogInformation("Drift correction: iframe={Iframe:F2}s native={Native:F2}s drift={Drift:F2}s",
+                iframeTime, nativePos, drift);
+            _nativeAudio.Seek(TimeSpan.FromSeconds(iframeTime));
         }
     }
 
