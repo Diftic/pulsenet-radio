@@ -559,14 +559,36 @@ public partial class OverlayWindow : Window
                 }
                 else
                 {
-                    // Same videoId, was paused — resume.
+                    // Same videoId — was paused (state=2) or buffering (state=3).
+                    // Resume, then immediately check drift: if the iframe jumped
+                    // while we were paused (seek inside buffer, network blip with
+                    // internal time movement), align native to iframe right away
+                    // rather than waiting for the next 2-second playerTimeUpdate.
                     _logger.LogDebug("Native audio: resuming {VideoId}", videoId);
                     _nativeAudio.Resume();
+                    if (!isLive)
+                    {
+                        var nativePos = _nativeAudio.Position.TotalSeconds;
+                        if (nativePos > 0 &&
+                            Math.Abs(iframeTime - nativePos) > NativeDriftThreshold.TotalSeconds)
+                        {
+                            _logger.LogInformation(
+                                "State-change drift sync: iframe={Iframe:F2}s native={Native:F2}s, seeking",
+                                iframeTime, nativePos);
+                            _nativeAudio.Seek(TimeSpan.FromSeconds(iframeTime));
+                        }
+                    }
                 }
                 break;
 
             case 2: // PAUSED
                 _logger.LogDebug("Native audio: pausing");
+                _nativeAudio.Pause();
+                break;
+
+            case 3: // BUFFERING — iframe's clock freezes here. Pause native so it
+                    // doesn't drift ahead during the wait. state=1 will resume + drift-sync.
+                _logger.LogTrace("Native audio: pausing (iframe buffering)");
                 _nativeAudio.Pause();
                 break;
 
@@ -576,7 +598,7 @@ public partial class OverlayWindow : Window
                 _activeNativeVideoId = null;
                 break;
 
-            // -1 UNSTARTED, 3 BUFFERING, 5 CUED: transient; wait for next state.
+            // -1 UNSTARTED, 5 CUED: transient; wait for next state.
         }
     }
 
