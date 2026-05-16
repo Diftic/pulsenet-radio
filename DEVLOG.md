@@ -88,9 +88,43 @@ Three more landings after the Phase E rip before stopping for the day.
 
 **Easter-egg thumbnail.** Solaris Classical (r4) wiring had also accidentally flipped `live:true`, switching the hover thumbnail to the online version. The intended framing is that the station looks dormant like its 17 siblings and clicking it reveals Rick Astley. Reverted to `live:false`; activation still uses the videoId, only the thumbnail differs.
 
+### Service helper landed (G1 + G2)
+
+After the audio half stabilised, jumped into the Option 3 Service helper architecture and validated it end-to-end the same evening.
+
+**G1: PulseNetHotkeyService standalone helper exe.** New project at `src/PulseNetHotkeyService/`, raw P/Invoke (no CsWin32 - the surface is small enough that pulling in the generator was overkill). Console app, installs `WH_KEYBOARD_LL` on a dedicated message-loop thread, mirrors `GlobalHotkeyListener`'s held-key + SetEquals match logic with the same stale-key pruning via `GetAsyncKeyState`. Named-pipe server at `\\.\pipe\PulseNetHotkey`, single-instance, line-delimited JSON protocol: client sends `{type:"setKeys",vkCodes:[120]}` once, server pushes `{type:"hotkey"}` on each match.
+
+First connection attempt from a normal PowerShell hit "Access to the path is denied" - default pipe ACL inherits the elevated server's High-IL token and rejects medium-IL clients. Fix: explicit `PipeSecurity` granting `AuthenticatedUserSid` `ReadWrite | CreateNewInstance`, applied via `NamedPipeServerStreamAcl.Create`. Tried adding `System.IO.Pipes.AccessControl` 9.0.3 as a PackageReference but that package was deprecated in .NET 6+; the types are now in the BCL.
+
+`scripts/test-hotkey-pipe.ps1` was added so we could validate the helper before wiring the player. Interactive PowerShell drops the pipe between commands (scope/disposal quirks), so the script-file invocation (`powershell -File`) is the only reliable way to use it.
+
+**G1 smoke test, the killshot.** Ran the helper elevated, connected via the script, then tested F9 in increasingly hostile contexts: desktop (worked), RSI Launcher (worked - this is the Windows 11 26200+ policy target), Star Citizen menus (worked), Star Citizen on a live server with full EAC (worked). The elevated-helper + named-pipe approach bypasses both Microsoft's user-mode LL hook restriction *and* EAC's process-tree analysis. Architecture lock-in.
+
+**G2: HotkeyClient in the player.** New `src/Services/HotkeyClient.cs` (`IHostedService`). Background reconnect loop (`Task.Run`) connects to `\\.\pipe\PulseNetHotkey` with a 1-second timeout, retries every 5s if helper is offline. On connect: derives vkCodes from `settings.ToggleHotkey.PressedKeys` via `WindowsKeyMap.ToCode` and sends a `setKeys` message. Subscribes to `SettingsChanged` so user remaps reach the helper without a restart. On `{type:"hotkey"}`: raises `HotkeyPressed` - same event shape `GlobalHotkeyListener` already raises, so the rest of the app picks it up without changes.
+
+`App.xaml.cs` arbitrates between the two sources: both sources' `HotkeyPressed` events feed the same `OnFirstHotkey` + tri-state lambda. When `HotkeyClient.ConnectionStateChanged` fires `connected=true`, `GlobalHotkeyListener.Paused = true` silences the local hook so we don't double-fire. Helper-offline path: `Paused = false`, local hook handles desktop / non-game focus as best-effort fallback.
+
+**Critical race fix.** First attempt produced "maximize-then-minimize" on every F9: both sources were firing because `HotkeyClient`'s pipe connect happens fast enough during host startup that `ConnectionStateChanged` fires *before* `App.xaml.cs` finishes attaching its subscription. The initial event was lost; `Paused` stayed false. Fix: one-line state sync immediately after subscribing - `listener.Paused = hotkeyClient.IsConnected;` - covers the missed-event window.
+
+**Project-config friction.** `pulsenet.csproj`'s default `**/*.cs` glob swept in `src/PulseNetHotkeyService/Program.cs` and tried to compile it as part of the player, producing duplicate assembly-attribute errors. Fix: explicit `<Compile Remove="PulseNetHotkeyService\**\*.cs" />` so the helper project owns those files exclusively.
+
+**G2 end-to-end validation.** Helper elevated + player non-elevated. One keypress = one toggle. Works in RSI Launcher, works in Star Citizen, music plays (Option 2 native audio), video plays (muted WebView2), single PulseNet-Player.exe session in Sonar. The full architectural answer to the day's opening problem - F8-in-SC failing for the user - is now empirically validated.
+
 ### Branch summary at end of day
 
-`feature/native-audio-option2` is 14 commits ahead of master (local-only per the migration-fallback rule). Option 2 audio half is feature-complete: muted WebView2 video + native player slaved to YT IFrame API + buffering-aware sync + URL-expiry recovery + single OBS source + one Sonar session. Remaining work before merge: Windows Service helper for hotkey delivery (Option 3, requires per-machine MSI conversion), drag-stick bug verification, Console Ctrl+C handler, real playlist IDs as broadcasters ship them.
+`feature/native-audio-option2` is 18 commits ahead of master (local-only per the migration-fallback rule). Two architecturally significant pieces shipped on this branch:
+
+1. **Option 2 audio half (feature-complete):** muted WebView2 video + native MediaPlayer slaved to YT IFrame API + buffering-aware sync + URL-expiry recovery + single OBS Window Capture source + one Sonar session.
+2. **Service helper (G1 + G2 done, validated):** elevated `PulseNetHotkeyService` exe + named-pipe IPC + `HotkeyClient` in the player + Paused-arbitration with `GlobalHotkeyListener`. Hotkey-in-game works across launcher, menus, and live SC with EAC.
+
+Remaining before merge:
+- **G3:** convert the standalone helper exe into a proper Windows Service (auto-start on boot, runs as SYSTEM).
+- **G4:** WiX MSI conversion from per-user to per-machine, add `<ServiceInstall>` + `<ServiceControl>` for the helper.
+- **G5:** end-to-end install/uninstall test, fallback toast when service is missing.
+- Drag-stick bug re-verification on this branch.
+- Console Ctrl+C handler in `App.OnStartup`.
+- Real playlist IDs for the other 17 stations as the broadcaster ships them.
+- Cosmetic: make `HotkeyClient.SendSetKeysAsync` idempotent so it stops re-sending setKeys on every overlay-toggle (settings save fires `SettingsChanged`).
 
 ---
 
