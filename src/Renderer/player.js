@@ -798,14 +798,12 @@
   }
 
   // ---- Streamer Info sub-panel ----
-  // OBS-setup walkthrough. Audio reaches OBS via a localhost HTTP stream
-  // (LocalAudioStreamServer in the host); video reaches OBS via Window
-  // Capture. The Copy URL button writes the stream URL to the clipboard
-  // for paste into OBS Media Source.
+  // OBS-setup walkthrough. With Option 2's native audio playing inline in
+  // PulseNet-Player.exe, OBS Window Capture's 'Capture Audio (BETA)' picks
+  // up both video and audio from a single source. No localhost stream URL.
   var streamerBtn       = document.getElementById('streamer-settings-btn');
   var streamerPanel     = document.getElementById('streamer-settings-panel');
   var streamerBackBtn   = document.getElementById('streamer-back-btn');
-  var copyStreamUrlBtn  = document.getElementById('copy-stream-url-btn');
 
   function showStreamerPanel() {
     if (settingsPanel) settingsPanel.classList.add('hidden');
@@ -828,24 +826,6 @@
     streamerBackBtn.addEventListener('click', function (e) {
       e.stopPropagation();
       hideStreamerPanel();
-    });
-  }
-
-  if (copyStreamUrlBtn) {
-    copyStreamUrlBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      var url = copyStreamUrlBtn.getAttribute('data-url') || '';
-      var original = copyStreamUrlBtn.textContent;
-      function flash(text) {
-        copyStreamUrlBtn.textContent = text;
-        setTimeout(function () { copyStreamUrlBtn.textContent = original; }, 1200);
-      }
-      try {
-        navigator.clipboard.writeText(url).then(
-          function () { flash('Copied!'); },
-          function () { flash('Copy failed'); }
-        );
-      } catch (_) { flash('Copy failed'); }
     });
   }
 

@@ -388,47 +388,11 @@ html, body {
   display: none;
 }
 
-/* Streamer Info section headers separating Video and Audio source setup.
-   Negative bottom margin pulls the OL up against the header, since the
-   parent's flex gap of 12px is too generous for a header-to-list pairing. */
-.streamer-info-section {
-  font-size: 13px;
-  font-weight: 600;
-  color: #22d3ee;
-  margin: 6px 0 -8px 0;
-  letter-spacing: 0.02em;
-}
-
 .streamer-info-intro {
   font-size: 12px;
   color: #cfeefa;
   line-height: 1.2;
   margin: 0;
-}
-
-/* Stream URL display + Copy button inline within the OL step */
-.stream-url-row {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 4px;
-  flex-wrap: wrap;
-}
-
-.stream-url {
-  font-family: Consolas, "Courier New", monospace;
-  font-size: 12px;
-  padding: 4px 8px;
-  background: rgba(34, 211, 238, 0.08);
-  border: 1px solid rgba(34, 211, 238, 0.28);
-  border-radius: 6px;
-  color: #cfeefa;
-  user-select: all;
-}
-
-.stream-url-copy {
-  padding: 4px 12px;
-  font-size: 12px;
 }
 
 /* Streamer Info panel — instructional content layout */

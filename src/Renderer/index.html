@@ -118,39 +118,25 @@
       </div>
     </div>
 
-    <!-- Layer 5c: Streamer Info sub-panel — OBS setup walkthrough. PulseNet
-         exposes video via the player window (Window Capture) and audio via a
-         dedicated localhost HTTP stream (Media Source). The two sources stay
-         in sync via OBS itself, with one playback control surface (this app). -->
+    <!-- Layer 5c: Streamer Info sub-panel. OBS Window Capture with
+         'Capture Audio (BETA)' ticked picks up both video and audio from the
+         player window in one source. The native audio plays inline within
+         PulseNet-Player.exe so OBS's per-process audio capture sees us. -->
     <div id="streamer-settings-panel" class="hidden">
       <div class="settings-row">
         <button id="streamer-back-btn" class="settings-action-btn">&#x2190; Back</button>
       </div>
       <div class="streamer-info-content">
         <p class="streamer-info-heading">Stream PulseNet with OBS Studio</p>
-        <p class="streamer-info-intro">PulseNet streams video through the player window and audio through a dedicated localhost feed only OBS can reach. Add two sources in OBS:</p>
+        <p class="streamer-info-intro">One source covers both video and audio. Add a Window Capture in OBS:</p>
 
-        <p class="streamer-info-section">1. Video: Window Capture</p>
         <ol class="streamer-info-steps" start="1">
           <li>Add a <strong>Window Capture</strong> source.</li>
           <li>Set <strong>Window</strong> to <em>PulseNet Player</em>.</li>
           <li>Set <strong>Capture Method</strong> to <em>Windows 10 (1903 and up)</em>.</li>
           <li>Untick <strong>Capture Cursor</strong>.</li>
           <li>Tick <strong>Client Area</strong>.</li>
-          <li>Leave <strong>Capture Audio (BETA)</strong> <em>unticked</em>. Audio comes from the next source.</li>
-        </ol>
-
-        <p class="streamer-info-section">2. Audio: Media Source</p>
-        <ol class="streamer-info-steps" start="7">
-          <li>Add a <strong>Media Source</strong>.</li>
-          <li>Untick <strong>Local File</strong>.</li>
-          <li>Paste this into <strong>Input</strong>:
-            <span class="stream-url-row">
-              <code class="stream-url">http://127.0.0.1:17329/stream.wav</code>
-              <button id="copy-stream-url-btn" class="settings-action-btn stream-url-copy" data-url="http://127.0.0.1:17329/stream.wav">Copy URL</button>
-            </span>
-          </li>
-          <li>Tick <strong>Restart playback when source becomes active</strong>.</li>
+          <li>Tick <strong>Capture Audio (BETA)</strong>. Audio comes through on the same source.</li>
         </ol>
 
         <p class="streamer-info-tip">Press <strong>F9</strong> to hide the player from your monitor. Viewers still see it in your stream.</p>
