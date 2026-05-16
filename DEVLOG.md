@@ -110,21 +110,41 @@ First connection attempt from a normal PowerShell hit "Access to the path is den
 
 **G2 end-to-end validation.** Helper elevated + player non-elevated. One keypress = one toggle. Works in RSI Launcher, works in Star Citizen, music plays (Option 2 native audio), video plays (muted WebView2), single PulseNet-Player.exe session in Sonar. The full architectural answer to the day's opening problem - F8-in-SC failing for the user - is now empirically validated.
 
+### Service helper packaging (G3 attempt + Scheduled Task pivot + G4 MSI)
+
+After G1+G2 validated the standalone helper + player wiring, productionising it took two big swings.
+
+**G3 attempt: Windows Service via `Microsoft.Extensions.Hosting.WindowsServices`.** Refactored `src/PulseNetHotkeyService/Program.cs` into `HookService : IHostedService` + a thin `Program.Main` that builds `Host.CreateApplicationBuilder` with `AddWindowsService` and `AddEventLog`. `NativeMethods` extracted to its own file. `pulsenet.csproj` already had `<Compile Remove="PulseNetHotkeyService\**\*.cs" />` from G2 so the helper's files weren't double-compiled. `scripts/install-service.ps1` + `scripts/uninstall-service.ps1` invoked `sc.exe create` / `sc.exe delete` for dev iteration.
+
+Empirically validated by installing and pointing the player at it: service ran, player's `HotkeyClient` connected over the pipe and sent `setKeys`, but **F9 produced zero hotkey matches anywhere on the system** - not even desktop. Classic Vista+ Session 0 isolation: SYSTEM services run on the Session 0 input desktop, user keystrokes go to Session 1+, hooks installed from one don't see the other. Diagnosis confirmed in G1 hindsight: it worked when launched manually as Administrator because that ran in the user's session, not as a service.
+
+**Pivot to Scheduled Task at user logon.** Same `PulseNetHotkeyService.exe`, different launcher. `scripts/install-task.ps1` registers a scheduled task with `LogonType=Interactive`, `RunLevel=Highest`, `AtLogOn` trigger, and `Start-ScheduledTask` immediately so dev doesn't need to re-log-in. The task fires the helper in the user's session, elevated, with no UAC prompt (the task itself was created with admin consent at install time). Hook sees user input again. Validated: F9 toggles overlay in RSI Launcher, in SC menus, and on a live SC server with full EAC. Service install scripts deleted. Workflow Option 3 -> Option A in the locked-in plan.
+
+**G4: WiX MSI integration.** `installer/installer.wxs` rewritten for `Scope=perMachine` (Program Files install root, HKLM registry KeyPath, MSI runs elevated, one UAC prompt at install time). Two `<CustomAction>` elements invoke `[%SystemRoot]\System32\WindowsPowerShell\v1.0\powershell.exe` against `[INSTALLFOLDER]install-task.ps1` and `[INSTALLFOLDER]uninstall-task.ps1` respectively. CAs run `Execute=deferred Impersonate=no` so they execute as SYSTEM during the MSI transaction; `[LogonUser]` is substituted into the install command line so the script knows which user account to register the task under. Sequenced as `UninstallHotkeyTask Before=RemoveFiles` and `InstallHotkeyTask After=InstallFiles`. `.github/workflows/build.yml` now publishes both projects into separate `artifacts/player` and `artifacts/helper` sub-folders, stages player tree + helper exe + both PS1 scripts before `wix build`.
+
+**Local MSI build chain.** Without a Windows VM, validated locally by installing WiX 5.0.2 as a global dotnet tool. First-run hit "Failed to parse file Microsoft.NETCore.App.runtimeconfig.json: document is empty" - a broken empty file in `C:\Program Files\dotnet\shared\Microsoft.NETCore.App\6.0.16\`. System-level corruption, .NET 6 is EOL anyway, deleted the directory and WiX rolled forward to a newer runtime. Built clean after that.
+
+**Console-window bug at install.** First MSI install launched the helper at logon via the scheduled task, but `PulseNetHotkeyService.exe` shipped with `OutputType=Exe` (console subsystem) so Windows allocated a visible cmd window for the helper every login. Fix: `OutputType=WinExe`. Developer console runs from PowerShell still inherit the parent console so ILogger Console-sink output stays visible during dev; the scheduled-task path has no parent console so output goes nowhere (EventLog logger covers production diagnostics).
+
+**Uninstall hardening + leftover broken-v1 cleanup.** Old MSI installs (built before this branch added the uninstall CA) couldn't release the helper's exe handle during uninstall and asked for a reboot to finish file deletion. New MSI's uninstall CA calls the hardened `uninstall-task.ps1` which: stops the task if running, force-kills every PulseNetHotkeyService process, `Wait-Process` to let the OS reap, 500ms settle for the exe handle to release, then `Unregister-ScheduledTask`. Each MSI carries its own uninstall sequence baked in at build time, so old installs still uninstall via their original (broken) sequence - one-time reboot needed to clear those.
+
+**Dev iteration: `scripts/build-msi.ps1`.** Multi-line copy-paste into PowerShell kept breaking long flag lines (PowerShell would split at `-p:` flag boundaries onto new commands). Consolidated the whole publish-stage-build chain into a single committed script. Logged a permanent feedback rule to `~/.claude/projects/.../memory/feedback_use_scripts_not_inline_commands.md`: "for any multi-step PowerShell/bash invocation, deliver a committed .ps1/.sh script and have the user run it; don't ask them to paste long inline command chains".
+
 ### Branch summary at end of day
 
-`feature/native-audio-option2` is 18 commits ahead of master (local-only per the migration-fallback rule). Two architecturally significant pieces shipped on this branch:
+`feature/native-audio-option2` is 23 commits ahead of master (local-only per the migration-fallback rule). Three architecturally significant pieces shipped on this branch:
 
 1. **Option 2 audio half (feature-complete):** muted WebView2 video + native MediaPlayer slaved to YT IFrame API + buffering-aware sync + URL-expiry recovery + single OBS Window Capture source + one Sonar session.
-2. **Service helper (G1 + G2 done, validated):** elevated `PulseNetHotkeyService` exe + named-pipe IPC + `HotkeyClient` in the player + Paused-arbitration with `GlobalHotkeyListener`. Hotkey-in-game works across launcher, menus, and live SC with EAC.
+2. **Hotkey helper (validated):** elevated `PulseNetHotkeyService.exe` (WinExe subsystem, raw P/Invoke LL keyboard hook + named-pipe IPC) launched by a per-user Scheduled Task at logon. `HotkeyClient` in the player connects, sends `setKeys`, raises `HotkeyPressed` on incoming events. `GlobalHotkeyListener.Paused` arbitrates between the two sources. Works in RSI Launcher, in SC menus, and on a live SC server with full EAC.
+3. **MSI packaging (in validation):** per-machine WiX 5 MSI with CustomActions that install + uninstall the scheduled task as part of the transaction. Workflow updated to publish both projects.
 
 Remaining before merge:
-- **G3:** convert the standalone helper exe into a proper Windows Service (auto-start on boot, runs as SYSTEM).
-- **G4:** WiX MSI conversion from per-user to per-machine, add `<ServiceInstall>` + `<ServiceControl>` for the helper.
-- **G5:** end-to-end install/uninstall test, fallback toast when service is missing.
+- **G5:** validate the full install + uninstall cycle from a clean state. Pending a reboot to clear the half-uninstalled v1 MSI, then a fresh v2 install + uninstall round-trip. Once that's clean the architecture is shippable.
 - Drag-stick bug re-verification on this branch.
 - Console Ctrl+C handler in `App.OnStartup`.
 - Real playlist IDs for the other 17 stations as the broadcaster ships them.
-- Cosmetic: make `HotkeyClient.SendSetKeysAsync` idempotent so it stops re-sending setKeys on every overlay-toggle (settings save fires `SettingsChanged`).
+- Cosmetic: make `HotkeyClient.SendSetKeysAsync` idempotent so it stops re-sending setKeys on every overlay-toggle.
+- Cosmetic: tray-toast fallback when `HotkeyClient.ConnectionStateChanged` stays disconnected past first-launch (helper missing).
 
 ---
 
