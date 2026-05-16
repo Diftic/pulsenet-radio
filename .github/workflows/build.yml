@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - "v*"
+      # Skip prerelease tags (anything containing a '-' suffix). Prereleases
+      # are intentionally hand-cut via `gh release create --prerelease` from a
+      # local build so the GitHub API's /releases/latest endpoint hides them
+      # from existing-user UpdateChecker polls. If this workflow ran on a
+      # prerelease tag it would re-upload via softprops/action-gh-release with
+      # the default prerelease=false and flip the flag, defeating the purpose.
+      - "!v*-*"
 
 permissions:
   contents: write
